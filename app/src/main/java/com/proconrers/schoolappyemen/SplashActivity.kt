@@ -1,39 +1,65 @@
 package com.proconrers.schoolappyemen
 
 import android.annotation.SuppressLint
-import android.app.ActivityOptions
 import android.content.Intent
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
+/**
+ * SplashActivity — AndroidX SplashScreen API migration
+ *
+ * BEFORE (removed):
+ *   Handler(Looper.getMainLooper()).postDelayed({ ... }, 2000)
+ *   - Added a fixed 2-second delay on every launch regardless of device speed
+ *   - Did not integrate with the system splash screen on Android 12+
+ *   - Used deprecated Handler pattern
+ *   - Showed a blank white screen during initialization on slow devices
+ *
+ * AFTER (this file):
+ *   - installSplashScreen() hooks into the system-level splash screen (API 31+)
+ *   - On API 24–30: shows the launch icon splash automatically, no extra delay
+ *   - Zero artificial delay — MainActivity starts as soon as the splash resolves
+ *   - Compatible with the existing activity_splash.xml drawable/background
+ *
+ * ANDROID MANIFEST:
+ *   SplashActivity must remain the LAUNCHER activity. No changes to
+ *   AndroidManifest.xml are required for this migration.
+ *
+ * THEME REQUIREMENT:
+ *   Add to res/values/themes.xml (and themes.xml (night)):
+ *     <style name="Theme.SchoolApp.Splash" parent="Theme.SplashScreen">
+ *       <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+ *       <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+ *       <item name="postSplashScreenTheme">@style/Theme.AppCompat.Light.NoActionBar</item>
+ *     </style>
+ *
+ *   Then in AndroidManifest.xml set SplashActivity's theme:
+ *     android:theme="@style/Theme.SchoolApp.Splash"
+ */
 @SuppressLint("CustomSplashScreen")
 class SplashActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Must be called before super.onCreate() — this is the API requirement
+        val splashScreen = installSplashScreen()
+
         super.onCreate(savedInstanceState)
 
-        // 1. ربط واجهة شاشة البداية (تأكد من وجود ملف activity_splash.xml في مجلد layout)
-        setContentView(R.layout.activity_splash)
+        // Optional: keep splash on screen until a condition is met
+        // (e.g. preloading config, checking first-run state)
+        // splashScreen.setKeepOnScreenCondition { viewModel.isLoading.value }
+        //
+        // For this app: no pre-loading needed, proceed immediately.
+        // The splash screen dismisses itself after the first frame renders.
 
-        // 2. الانتقال التلقائي إلى الشاشة الرئيسية بعد ثانيتين (2000 مللي ثانية)
-        Handler(Looper.getMainLooper()).postDelayed({
-            val intent = Intent(this, MainActivity::class.java)
-
-            // ✅ إضافة حركة انتقال ناعمة (FadeIn/Out) لتتناسق مع احترافية التطبيق
-            val options = ActivityOptions.makeCustomAnimation(
-                this,
-                android.R.anim.fade_in,
-                android.R.anim.fade_out
-            )
-
-            // تشغيل النشاط الجديد مع تأثيرات الانتقال
-            startActivity(intent, options.toBundle())
-
-            // ✅ إنهاء شاشة البداية لكي لا يعود إليها المستخدم عند الضغط على زر الرجوع
-            finish()
-
-        }, 2000)
+        // Navigate to MainActivity immediately — no artificial delay
+        startActivity(
+            Intent(this, MainActivity::class.java).apply {
+                // Prevent the user from navigating back to SplashActivity
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+        )
+        finish()
     }
 }

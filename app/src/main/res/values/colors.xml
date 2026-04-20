@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Purple shades -->
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
+    <!-- App brand colors -->
+    <color name="ic_launcher_background">#081625</color>
+    <color name="brand_primary">#0f3b5c</color>
+    <color name="brand_accent">#e76f51</color>
 
-    <!-- Teal shades -->
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-
-    <!-- Basic colors -->
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <!-- WebView progress indicator — matches app brand primary -->
+    <color name="progress_indicator_color">#0f3b5c</color>
 </resources>

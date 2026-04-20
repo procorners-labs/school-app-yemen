@@ -2,13 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- أذونات الإنترنت والشبكة -->
+    <!-- Network permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- أذونات التخزين للأجهزة القديمة فقط -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- Storage permissions for file upload (legacy devices) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:allowBackup="true"
@@ -23,29 +25,46 @@
         android:theme="@style/Theme.AppCompat.Light.NoActionBar"
         tools:targetApi="35">
 
-        <!-- شاشة البداية (Launcher) -->
+        <!--
+            SplashActivity — LAUNCHER entry point.
+            PRIORITY 7 FIX: android:theme set to Theme.SchoolApp.Splash
+            which is required by the AndroidX SplashScreen API (installSplashScreen()).
+            Without this theme, installSplashScreen() throws an exception on API 31+.
+        -->
         <activity
             android:name=".SplashActivity"
-            android:exported="true">
+            android:exported="true"
+            android:theme="@style/Theme.SchoolApp.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- الشاشة الرئيسية (الواجهة) -->
+        <!--
+            MainActivity — hosts the CMS WebView.
+            configChanges prevents activity restart on rotation/keyboard,
+            preserving WebView state.
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
 
-        <!-- منصة المعلمين -->
+        <!--
+            TeacherActivity — hosts the Teacher platform WebView.
+            windowSoftInputMode=adjustResize ensures the keyboard doesn't
+            overlap form inputs in the teacher portal.
+        -->
         <activity
             android:name=".TeacherActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
-        <!-- منصة الطلاب -->
+        <!--
+            StudentActivity — hosts the Student/Parent platform WebView.
+        -->
         <activity
             android:name=".StudentActivity"
             android:exported="false"

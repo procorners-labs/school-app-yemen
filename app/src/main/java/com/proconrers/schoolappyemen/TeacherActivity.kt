@@ -19,7 +19,6 @@ class TeacherActivity : AppCompatActivity() {
     private lateinit var binding: ActivityWebviewBinding
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
 
-    // ✅ نظام اختيار الملفات الحديث (لرفع صور، PDF، إلخ)
     private val fileChooserLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -42,11 +41,9 @@ class TeacherActivity : AppCompatActivity() {
 
         setupWebView()
 
-        // ✅ رابط منصة المعلمين والإدارة
-        val teacherUrl = "https://script.google.com/macros/s/AKfycbwbiM1NdYlHf4XPpeftVcrJPmcrPJWm7KS2sSL4qtzZDMDtYo4sGdx6T-p8fAIArvND/exec"
-        binding.webView.loadUrl(teacherUrl)
+        // URL sourced from AppConfig — update there if deployment changes
+        binding.webView.loadUrl(AppConfig.TEACHER_URL)
 
-        // ✅ معالج زر الرجوع
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (binding.webView.canGoBack()) {
@@ -72,7 +69,8 @@ class TeacherActivity : AppCompatActivity() {
             useWideViewPort = true
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             cacheMode = WebSettings.LOAD_DEFAULT
-            userAgentString = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+            userAgentString = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 " +
+                    "(KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
         }
 
         binding.webView.webChromeClient = object : WebChromeClient() {
@@ -104,7 +102,7 @@ class TeacherActivity : AppCompatActivity() {
             }
 
             override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                Log.d("WebViewConsole", "${consoleMessage.message()} -- ${consoleMessage.sourceId()}")
+                Log.d(TAG, "JS: ${consoleMessage.message()} [${consoleMessage.sourceId()}]")
                 return true
             }
         }
@@ -113,13 +111,13 @@ class TeacherActivity : AppCompatActivity() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 binding.progressBar.visibility = View.VISIBLE
-                Log.d("TeacherWebView", "Page started: $url")
+                Log.d(TAG, "Page started: $url")
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 binding.progressBar.visibility = View.GONE
-                Log.d("TeacherWebView", "Page finished: $url")
+                Log.d(TAG, "Page finished: $url")
             }
 
             override fun onReceivedHttpError(
@@ -128,22 +126,24 @@ class TeacherActivity : AppCompatActivity() {
                 errorResponse: WebResourceResponse?
             ) {
                 super.onReceivedHttpError(view, request, errorResponse)
-                Log.e("TeacherWebView", "HTTP error: ${errorResponse?.statusCode} for ${request?.url}")
+                Log.e(TAG, "HTTP ${errorResponse?.statusCode} for ${request?.url}")
             }
 
+            // ─── SSL handling: trusted Google domains only, via AppConfig ──────
             @SuppressLint("WebViewClientOnReceivedSslError")
             override fun onReceivedSslError(
                 view: WebView?,
                 handler: SslErrorHandler?,
                 error: SslError?
             ) {
-                val url = view?.url ?: ""
-                if (url.contains("google.com") || url.contains("gstatic.com") || url.contains("googleusercontent.com")) {
+                val failingUrl = error?.url ?: view?.url ?: ""
+                if (AppConfig.isTrustedSslDomain(failingUrl)) {
                     handler?.proceed()
-                    Log.d("TeacherWebView", "SSL error accepted for trusted domain: $url")
+                    Log.d(TAG, "SSL accepted for trusted domain: $failingUrl")
                 } else {
                     handler?.cancel()
-                    Log.e("TeacherWebView", "SSL error rejected for untrusted domain: $url")
+                    Log.e(TAG, "SSL REJECTED for untrusted domain: $failingUrl")
+                    showErrorPage(view, sslError = true)
                 }
             }
 
@@ -153,23 +153,51 @@ class TeacherActivity : AppCompatActivity() {
                 error: WebResourceError?
             ) {
                 if (request?.url.toString().contains("favicon.ico")) return
-
-                Log.e("TeacherWebView", "Error: ${error?.errorCode} - ${error?.description}")
-
+                Log.e(TAG, "Error ${error?.errorCode}: ${error?.description}")
                 binding.progressBar.visibility = View.GONE
-                val errorHtml = """
-                    <html dir='rtl'>
-                    <head><meta name='viewport' content='width=device-width, initial-scale=1'></head>
-                    <body style='text-align:center; padding:50px; font-family:sans-serif; background:#f8fafc; color:#334155;'>
-                        <div style='font-size:50px;'>⚠️</div>
-                        <h2 style='color:#e76f51;'>عذراً، تعذر تحميل الصفحة</h2>
-                        <p>يرجى التأكد من اتصالك بالإنترنت ثم حاول مجدداً.</p>
-                        <button onclick='location.reload()' style='padding:12px 30px; background:#0f3b5c; color:white; border:none; border-radius:25px; font-size:16px; cursor:pointer;'>إعادة المحاولة</button>
-                    </body>
-                    </html>
-                """.trimIndent()
-                view?.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
+                showErrorPage(view, sslError = false)
             }
         }
+    }
+
+    private fun showErrorPage(view: WebView?, sslError: Boolean) {
+        val title = if (sslError) "خطأ في الاتصال الآمن" else "عذراً، تعذر تحميل الصفحة"
+        val body = if (sslError) {
+            "تعذر التحقق من أمان الاتصال. تواصل مع الدعم الفني."
+        } else {
+            "يرجى التأكد من اتصالك بالإنترنت ثم حاول مجدداً."
+        }
+        val html = """
+            <html dir='rtl'>
+            <head><meta name='viewport' content='width=device-width, initial-scale=1'></head>
+            <body style='text-align:center;padding:50px 24px;font-family:sans-serif;
+                         background:#f8fafc;color:#334155;'>
+                <div style='font-size:50px;'>⚠️</div>
+                <h2 style='color:#e76f51;'>$title</h2>
+                <p>$body</p>
+                ${if (!sslError) "<button onclick='location.reload()' style='padding:12px 30px;background:#0f3b5c;color:white;border:none;border-radius:25px;font-size:16px;cursor:pointer;'>إعادة المحاولة</button>" else ""}
+            </body></html>
+        """.trimIndent()
+        view?.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        binding.webView.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        binding.webView.onPause()
+    }
+
+    override fun onDestroy() {
+        binding.webView.stopLoading()
+        binding.webView.destroy()
+        super.onDestroy()
+    }
+
+    companion object {
+        private const val TAG = "TeacherWebView"
     }
 }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.proconrers.schoolappyemen"
         minSdk = 24
         targetSdk = 35
-        versionCode = 16
-        versionName = "1.6"
+        versionCode = 17
+        versionName = "1.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
@@ -26,6 +26,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            isMinifyEnabled = false
         }
     }
 
@@ -45,24 +48,29 @@ android {
 }
 
 dependencies {
-    // ✅ المكتبات الأساسية (Core) - متوافقة تماماً مع Android 15 (SDK 35)
+    // Core
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
 
-    // ✅ واجهة المستخدم (UI) - أحدث إصدار مستقر للتصاميم الحديثة
+    // ── Priority 7: AndroidX Splash Screen API ─────────────────────────────
+    // Required for SplashActivity migration from Handler.postDelayed.
+    // Backports the Android 12+ splash screen to API 24+.
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
+    // UI
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
 
-    // ✅ دعم تعدد الملفات (MultiDex) - ضروري لمنع أخطاء البناء في المشاريع الكبيرة
+    // MultiDex
     implementation("androidx.multidex:multidex:2.0.1")
 
-    // ✅ مكتبة الويب (WebView) - الإصدار الأحدث لضمان عمل منصة المدرسة ورفع الملفات بأمان
+    // WebView
     implementation("androidx.webkit:webkit:1.12.1")
 
-    // ✅ مكتبة Activity Compose - لدعم enableEdgeToEdge في Android 15
+    // Activity (enableEdgeToEdge)
     implementation("androidx.activity:activity-compose:1.9.3")
 
-    // ✅ مكتبات الاختبار (Testing) - إصدارات مستقرة ومحدثة
+    // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
