@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 1. الإعداد العام: السماح بمرور البيانات لضمان عدم حظر أي روابط فرعية من جوجل -->
+    <base-config cleartextTrafficPermitted="true"><trust-anchors>
+        <certificates src="system" />
+    </trust-anchors>
+    </base-config>
+
+    <!-- 2. إعدادات خاصة بنطاقات جوجل لضمان أعلى توافق مع Google Scripts و Drive -->
+    <domain-config cleartextTrafficPermitted="true"><domain includeSubdomains="true">google.com</domain>
+        <domain includeSubdomains="true">script.google.com</domain>
+        <domain includeSubdomains="true">googleusercontent.com</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">gstatic.com</domain>
+        <domain includeSubdomains="true">docs.google.com</domain>
+        <domain includeSubdomains="true">drive.google.com</domain>
+    </domain-config>
+</network-security-config>

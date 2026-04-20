@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SchoolAppyemen</string><string name="school_full_name">مدارس الإبداع والتميز الدولية</string><string name="btn_teacher_text">منصة المعلمين والإدارة</string>
+    <string name="btn_student_text">منصة الطلاب وأولياء الأمور</string>
+    <string name="school_logo_desc">شعار مدارس الإبداع والتميز</string>
+</resources>
