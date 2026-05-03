@@ -41,7 +41,7 @@ class StudentActivity : AppCompatActivity() {
 
         setupWebView()
 
-        // URL sourced from AppConfig — update there if deployment changes
+        // تحميل عنوان URL الخاص بمنصة الطالب
         binding.webView.loadUrl(AppConfig.STUDENT_URL)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -69,8 +69,10 @@ class StudentActivity : AppCompatActivity() {
             useWideViewPort = true
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             cacheMode = WebSettings.LOAD_DEFAULT
-            userAgentString = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+            // ✅ نفس User‑Agent المعدل (لتثبيت اكتشاف WebView)
+            userAgentString = "Mozilla/5.0 (Linux; Android 13; wv; SchoolAppYemen/1.0) " +
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 " +
+                    "Chrome/119.0.0.0 Mobile Safari/537.36"
         }
 
         binding.webView.webChromeClient = object : WebChromeClient() {
@@ -129,7 +131,48 @@ class StudentActivity : AppCompatActivity() {
                 Log.e(TAG, "HTTP ${errorResponse?.statusCode} for ${request?.url}")
             }
 
-            // ─── SSL handling: trusted Google domains only, via AppConfig ──────
+            // ─── ✅ التوجيه الذكي للروابط (معكوس: الطالب يبقى، المعلم ينتقل) ───
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean {
+                val url = request?.url?.toString() ?: return false
+                return when {
+                    // الرابط يخص منصة الطالب نفسه → نبقى داخل هذا الـ WebView
+                    AppConfig.isStudentUrl(url) -> false
+
+                    // الرابط يخص منصة المعلم → نفتح TeacherActivity
+                    AppConfig.isTeacherUrl(url) -> {
+                        startActivity(Intent(this@StudentActivity, TeacherActivity::class.java))
+                        true
+                    }
+
+                    // الرابط يخص CMS أو الصفحة الرئيسية → نفتح MainActivity وننهي النشاط الحالي
+                    AppConfig.isCmsUrl(url) || AppConfig.isHomeUrl(url) -> {
+                        val intent = Intent(this@StudentActivity, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        }
+                        startActivity(intent)
+                        finish()
+                        true
+                    }
+
+                    // الروابط التي تحتوي على نطاقات Google الموثوقة → نتركها للـ WebView
+                    url.contains("google.com") || url.contains("googleusercontent.com") -> false
+
+                    // أي رابط آخر (خارجي) → نفتحه في متصفح الهاتف
+                    else -> {
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Cannot open external URL: $url", e)
+                        }
+                        true
+                    }
+                }
+            }
+
+            // ─── SSL handling (نفس ما في TeacherActivity) ───
             @SuppressLint("WebViewClientOnReceivedSslError")
             override fun onReceivedSslError(
                 view: WebView?,

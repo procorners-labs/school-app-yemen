@@ -46,6 +46,10 @@ class SplashActivity : AppCompatActivity() {
 
         super.onCreate(savedInstanceState)
 
+        // ✅ تهيئة AppConfig وبدء المزامنة في الخلفية (بدون انتظار)
+        // هذه الدالة تقوم بتحميل أحدث روابط المنصات من الخادم وتخزينها محلياً
+        AppConfig.init(applicationContext)
+
         // Optional: keep splash on screen until a condition is met
         // (e.g. preloading config, checking first-run state)
         // splashScreen.setKeepOnScreenCondition { viewModel.isLoading.value }
