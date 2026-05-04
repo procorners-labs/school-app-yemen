@@ -11,7 +11,7 @@ android {
         applicationId = "com.proconrers.schoolappyemen"
         minSdk = 24
         targetSdk = 35
-        versionCode = 18
+        versionCode = 20git status
         versionName = "1.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

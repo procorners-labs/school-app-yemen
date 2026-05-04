@@ -2,11 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Network permissions -->
+    <!-- صلاحيات الشبكة -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Storage permissions for file upload (legacy devices) -->
+    <!-- صلاحيات التخزين لرفع الملفات (للأجهزة القديمة فقط) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -26,10 +26,10 @@
         tools:targetApi="35">
 
         <!--
-            SplashActivity — LAUNCHER entry point.
-            PRIORITY 7 FIX: android:theme set to Theme.SchoolApp.Splash
-            which is required by the AndroidX SplashScreen API (installSplashScreen()).
-            Without this theme, installSplashScreen() throws an exception on API 31+.
+            SplashActivity — نقطة الدخول الرئيسية (LAUNCHER).
+            - تُهيئ AppConfig وتبدأ المزامنة في الخلفية.
+            - theme مخصص (Theme.SchoolApp.Splash) لتلبية متطلبات AndroidX SplashScreen API.
+            - تنتقل فوراً إلى MainActivity دون تأخير اصطناعي.
         -->
         <activity
             android:name=".SplashActivity"
@@ -42,9 +42,10 @@
         </activity>
 
         <!--
-            MainActivity — hosts the CMS WebView.
-            configChanges prevents activity restart on rotation/keyboard,
-            preserving WebView state.
+            MainActivity — يستضيف الواجهة العامة للمدرسة (الموقع الرسمي).
+            ✅ تم التصحيح: يعرض HOME_URL (AppConfig.HOME_URL) وليس CMS_URL.
+            - المحتوى: الأخبار، الصور، الفيديوهات، الإحصائيات، أزرار المنصات.
+            - configChanges يمنع إعادة تشغيل WebView عند تدوير الشاشة أو إظهار لوحة المفاتيح.
         -->
         <activity
             android:name=".MainActivity"
@@ -52,9 +53,8 @@
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!--
-            TeacherActivity — hosts the Teacher platform WebView.
-            windowSoftInputMode=adjustResize ensures the keyboard doesn't
-            overlap form inputs in the teacher portal.
+            TeacherActivity — يستضيف منصة المعلمين.
+            - windowSoftInputMode=adjustResize لضمان ظهور حقول الإدخال فوق لوحة المفاتيح.
         -->
         <activity
             android:name=".TeacherActivity"
@@ -63,7 +63,7 @@
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!--
-            StudentActivity — hosts the Student/Parent platform WebView.
+            StudentActivity — يستضيف منصة الطلاب وأولياء الأمور.
         -->
         <activity
             android:name=".StudentActivity"

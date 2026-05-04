@@ -17,35 +17,49 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.proconrers.schoolappyemen.databinding.ActivityMainBinding
 
+/**
+ * MainActivity — بوابة الدخول الرئيسية لمنظومة مدارس الإبداع والتميز.
+ *
+ * ─── المسؤولية ─────────────────────────────────────────────────────────────
+ * تعرض **الموقع الرسمي العام للمدرسة** (Code.gs / Index.html):
+ *   - الأخبار، الصور، الفيديوهات، الإحصائيات
+ *   - أزرار الانتقال إلى منصة المعلمين / الطلاب / CMS
+ *
+ * ─── سبب التغيير الجوهري (مهم) ────────────────────────────────────────────
+ * النسخة السابقة كانت تحمّل `AppConfig.CMS_URL` تلقائياً عند الإقلاع، فيرى
+ * المستخدم العادي صفحة إدارة المحتوى بدلاً من الموقع الرسمي الذي يخدم الزوار
+ * وأولياء الأمور والطلاب. النسخة الحالية تحمّل `AppConfig.HOME_URL` افتراضياً،
+ * وتفتح CMS فقط حين يطلبه المستخدم صراحةً عبر روابط داخل الموقع.
+ *
+ * ─── منطق التوجيه (shouldOverrideUrlLoading) ──────────────────────────────
+ *   - رابط الموقع الرسمي  → يبقى داخل MainActivity (false)
+ *   - رابط منصة المعلمين  → يفتح TeacherActivity
+ *   - رابط منصة الطلاب    → يفتح StudentActivity
+ *   - رابط CMS            → يبقى داخل MainActivity (نفس الـ WebView)
+ *   - نطاقات Google موثوقة → يبقى داخل WebView (إعادة توجيه Apps Script)
+ *   - أي رابط خارجي آخر    → يفتح في متصفح النظام
+ */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
 
-    // ─── Trusted domains that are permitted to proceed past SSL errors ────────
-    // Includes all Google sub-services used by Apps Script web apps.
-    // Any domain NOT in this list will have its SSL error rejected and the
-    // user will see an Arabic error page. Never add wildcard entries here.
-    private val trustedSslDomains = listOf(
-        "google.com",
-        "script.google.com",
-        "script.googleusercontent.com",
-        "googleusercontent.com",
-        "googleapis.com",
-        "gstatic.com",
-        "docs.google.com",
-        "drive.google.com",
-        "accounts.google.com"
-    )
-
-    private val mainUrl = AppConfig.CMS_URL
+    /**
+     * الرابط الرئيسي الذي يُحمَّل عند بدء التطبيق.
+     * ⭐ تم التغيير من CMS_URL إلى HOME_URL ليعرض الموقع الرسمي للمدرسة.
+     * AppConfig يقرأ القيمة من SharedPreferences (المُحدَّثة من الخادم تلقائياً).
+     */
+    private val mainUrl: String get() = AppConfig.HOME_URL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // ضمان تهيئة AppConfig (في حال جاء المستخدم من خارج SplashActivity)
+        AppConfig.init(applicationContext)
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.mainContainer) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -57,6 +71,9 @@ class MainActivity : AppCompatActivity() {
 
         initViews()
         setupWebView()
+
+        // ⭐ تحميل الموقع الرسمي للمدرسة (وليس CMS)
+        Log.d(TAG, "Loading HOME URL: $mainUrl")
         webView.loadUrl(mainUrl)
     }
 
@@ -85,34 +102,47 @@ class MainActivity : AppCompatActivity() {
             allowContentAccess = true
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             cacheMode = WebSettings.LOAD_DEFAULT
-            userAgentString = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+            // علامتا "wv" و "SchoolAppYemen" تُستخدمان من JavaScript للكشف
+            // عن WebView وإلغاء target=_blank وضبط السلوك الديناميكي
+            userAgentString = "Mozilla/5.0 (Linux; Android 13; wv; SchoolAppYemen/1.0) " +
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 " +
+                    "Chrome/119.0.0.0 Mobile Safari/537.36"
         }
 
         webView.webViewClient = object : WebViewClient() {
 
+            // ─── ⭐ التوجيه الذكي للروابط ───
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
                 request: WebResourceRequest?
             ): Boolean {
-                val url = request?.url.toString()
+                val url = request?.url?.toString() ?: return false
+                Log.d(TAG, "shouldOverride: $url")
 
                 return when {
-                    // Route to TeacherActivity when the Teacher script key is detected
+                    // الرابط يخص الموقع الرسمي → نبقى داخل MainActivity
+                    AppConfig.isHomeUrl(url) -> false
+
+                    // الرابط يخص منصة المعلمين → نفتح TeacherActivity
                     AppConfig.isTeacherUrl(url) -> {
                         startActivity(Intent(this@MainActivity, TeacherActivity::class.java))
                         true
                     }
-                    // Route to StudentActivity when the Student script key is detected
+
+                    // الرابط يخص منصة الطلاب → نفتح StudentActivity
                     AppConfig.isStudentUrl(url) -> {
                         startActivity(Intent(this@MainActivity, StudentActivity::class.java))
                         true
                     }
-                    // Let all Google domains load inside this WebView
-                    url.contains("google.com") || url.contains("googleusercontent.com") -> {
-                        false
-                    }
-                    // Open any other external URL in the system browser
+
+                    // الرابط يخص CMS → نبقى داخل WebView نفسه (ضمن MainActivity)
+                    // المستخدم اختار الانتقال صراحةً عبر زر/رابط
+                    AppConfig.isCmsUrl(url) -> false
+
+                    // نطاقات Google الموثوقة (إعادة توجيه Apps Script، صور Drive، …)
+                    url.contains("google.com") || url.contains("googleusercontent.com") -> false
+
+                    // أي رابط خارجي آخر → يُفتح في متصفح النظام
                     else -> {
                         try {
                             startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
@@ -132,10 +162,7 @@ class MainActivity : AppCompatActivity() {
                 progressBar.visibility = View.GONE
             }
 
-            // ─── FIX: Restricted SSL bypass — trusted domains only ─────────────
-            // Previously: handler?.proceed() was called for ALL domains (security bug).
-            // Now: only domains in trustedSslDomains list proceed; all others are
-            // rejected and the user sees an Arabic error page.
+            // ─── معالجة SSL — نطاقات Google الموثوقة فقط ───
             @SuppressLint("WebViewClientOnReceivedSslError")
             override fun onReceivedSslError(
                 view: WebView?,
@@ -143,15 +170,11 @@ class MainActivity : AppCompatActivity() {
                 error: SslError?
             ) {
                 val failingUrl = error?.url ?: view?.url ?: ""
-                val isTrusted = trustedSslDomains.any { domain ->
-                    failingUrl.contains(domain, ignoreCase = true)
-                }
-
-                if (isTrusted) {
-                    Log.d(TAG, "SSL error accepted for trusted domain: $failingUrl")
+                if (AppConfig.isTrustedSslDomain(failingUrl)) {
+                    Log.d(TAG, "SSL accepted for trusted domain: $failingUrl")
                     handler?.proceed()
                 } else {
-                    Log.e(TAG, "SSL error REJECTED for untrusted domain: $failingUrl " +
+                    Log.e(TAG, "SSL REJECTED for untrusted domain: $failingUrl " +
                             "| Error: ${error?.primaryError}")
                     handler?.cancel()
                     showSslErrorPage(failingUrl)
@@ -171,7 +194,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ─── Error pages ──────────────────────────────────────────────────────────
+    // ─── صفحات الخطأ ────────────────────────────────────────────────────────
 
     private fun showErrorPage() {
         val html = buildErrorHtml(
@@ -182,7 +205,7 @@ class MainActivity : AppCompatActivity() {
         webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
     }
 
-    private fun showSslErrorPage(url: String) {
+    private fun showSslErrorPage(@Suppress("UNUSED_PARAMETER") url: String) {
         val html = buildErrorHtml(
             title = "تحذير: خطأ في الاتصال الآمن",
             body = "لم يتمكن التطبيق من التحقق من أمان الاتصال بالخادم.\n" +
@@ -214,7 +237,7 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent()
     }
 
-    // ─── Back navigation ──────────────────────────────────────────────────────
+    // ─── زر الرجوع ─────────────────────────────────────────────────────────
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
@@ -224,7 +247,7 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
-    // ─── WebView lifecycle ────────────────────────────────────────────────────
+    // ─── دورة حياة WebView ─────────────────────────────────────────────────
 
     override fun onResume() {
         super.onResume()
