@@ -23,7 +23,7 @@ import kotlin.concurrent.thread
 object AppConfig {
 
     private const val TAG = "AppConfig"
-    private const val PREFS_NAME = "deployment_config_v2"
+    private const val PREFS_NAME = "deployment_config_v3"
     private const val PREFS_LAST_UPDATE = "last_update_ts"
 
     // مفاتيح SharedPreferences
@@ -36,15 +36,15 @@ object AppConfig {
 
     // ─── الروابط الافتراضية (تُستخدم فقط في الإقلاع الأول قبل أول مزامنة) ──
     private const val DEFAULT_HOME =
-        "https://script.google.com/macros/s/AKfycbzDfGEK6IpChVNl9k8xbt_iv5p6bLOktt-TvEzDp8yBpH3Ga3yNMen_0S2ZyuuvGtKFCA/exec"
+        "https://school-teacher-proxy.procorners-shop.workers.dev/home/index.html"
     private const val DEFAULT_CMS =
-        "https://script.google.com/macros/s/AKfycbz-iAj9L3ROOn4CAjmwkVBUqpWuxIx1LkgPLwKnHu7kHLWKCy3GVJNo1vZbnekop0VlMA/exec"
+        "https://school-teacher-proxy.procorners-shop.workers.dev/cms/index.html"
     private const val DEFAULT_TEACHER =
-        "https://script.google.com/macros/s/AKfycbwbiM1NdYlHf4XPpeftVcrJPmcrPJWm7KS2sSL4qtzZDMDtYo4sGdx6T-p8fAIArvND/exec"
+        "https://school-teacher-proxy.procorners-shop.workers.dev/teacher/index.html"
     private const val DEFAULT_STUDENT =
-        "https://script.google.com/macros/s/AKfycbz6wFJBq6RUg7buXM5LIGfEa4eVXZguPeIyrkg-T-kbOUhWlJMypO3Ame6lmcHzdcwq/exec"
+        "https://school-teacher-proxy.procorners-shop.workers.dev/student/index.html"
     private const val DEFAULT_SCHEDULE =
-        "https://script.google.com/macros/s/AKfycbwbsWcoOZ23TUWDtxVTV1RyG2LJ7IYWTWuk9Jt-15OeB1JgqRIyGSRxZo3NB8ZI2ag/exec"
+        "https://school-teacher-proxy.procorners-shop.workers.dev/schedule/index.html"
     private const val DEFAULT_MASTER =
         "https://script.google.com/macros/s/AKfycbx5H6uYXb-6iVt_nT4YkdnYMhl6eZJSDxsULsKa2eyblZQcwzRo4CXR3Mh_ecRSZd4M/exec"
 
@@ -63,8 +63,8 @@ object AppConfig {
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         initialized = true
 
-        // مزامنة في الخلفية لو مرّ وقت كافٍ منذ آخر تحديث
-        syncIfNeeded()
+        // ⛔ مُعطّلة: التطبيق يستخدم روابط الـ Worker الثابتة (لا مزامنة GAS)
+        // syncIfNeeded()
     }
 
     // ─── واجهة الاستخدام (URLs) ───────────────────────────────────────────────
@@ -94,8 +94,15 @@ object AppConfig {
      */
     private fun matchesDeployment(url: String, deploymentUrl: String): Boolean {
         if (url.isBlank() || deploymentUrl.isBlank()) return false
-        val id = extractDeploymentId(deploymentUrl) ?: return false
-        return url.contains(id, ignoreCase = true)
+        val id = extractDeploymentId(deploymentUrl)
+        if (id != null) return url.contains(id, ignoreCase = true)
+        // روابط الـ Worker: طابِق حسب مسار الصفحة (/teacher/ , /student/ ...)
+        val seg = extractWorkerSegment(deploymentUrl)
+        return seg != null && url.contains(seg, ignoreCase = true)
+    }
+
+    private fun extractWorkerSegment(url: String): String? {
+        return Regex("/(home|student|teacher|cms|schedule)/").find(url)?.value
     }
 
     private fun extractDeploymentId(url: String): String? {
@@ -105,6 +112,7 @@ object AppConfig {
 
     // ─── النطاقات الموثوقة (SSL) ──────────────────────────────────────────────
     val trustedSslDomains: List<String> = listOf(
+        "workers.dev",
         "google.com",
         "script.google.com",
         "script.googleusercontent.com",
