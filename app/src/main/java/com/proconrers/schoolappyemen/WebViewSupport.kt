@@ -1,8 +1,11 @@
 package com.proconrers.schoolappyemen
 
+import android.app.Activity
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -133,5 +136,62 @@ object WebViewSupport {
             Log.e(TAG, "Download failed: $url", e)
             Toast.makeText(context, "تعذّر بدء التنزيل", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /** هل يوجد اتصال إنترنت فعّال الآن؟ */
+    fun isOnline(context: Context): Boolean {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val net = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(net) ?: return false
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } catch (e: Exception) {
+            true // عند الشك، اسمح بمحاولة التحميل
+        }
+    }
+
+    /**
+     * يثبّت معالج التنزيل على الـ WebView:
+     *   - روابط http/https → DownloadManager (مع بديل المتصفح للأجهزة الأقدم).
+     *   - روابط blob:/data: (تصدير Excel من SheetJS) → نقرأها كـ Base64 عبر
+     *     JavaScript ونحفظها محلياً عبر الجسر AndroidApp.saveBase64.
+     * يتطلّب أن يكون الجسر [SchoolJsBridge] مُثبّتاً مسبقاً باسم [JS_BRIDGE].
+     */
+    fun installDownloadHandler(webView: WebView, activity: Activity) {
+        webView.setDownloadListener { url, ua, cd, mime, _ ->
+            if (url.startsWith("blob:") || url.startsWith("data:")) {
+                val fileName = URLUtil.guessFileName(url, cd, mime)
+                webView.evaluateJavascript(blobToBase64Js(url, fileName, mime ?: ""), null)
+            } else {
+                handleDownload(activity, url, ua, cd, mime)
+            }
+        }
+    }
+
+    /** سكربت JS يقرأ blob/data كـ Base64 ويمرّره للجسر الأصلي ليحفظه. */
+    private fun blobToBase64Js(blobUrl: String, fileName: String, mimeType: String): String {
+        val safeName = fileName.replace("'", "")
+        val safeMime = mimeType.replace("'", "")
+        return """
+            (function(){
+              try{
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', '$blobUrl', true);
+                xhr.responseType = 'blob';
+                xhr.onload = function(){
+                  if (xhr.status === 200 || xhr.status === 0) {
+                    var reader = new FileReader();
+                    reader.onloadend = function(){
+                      if (window.$JS_BRIDGE && window.$JS_BRIDGE.saveBase64) {
+                        window.$JS_BRIDGE.saveBase64(reader.result, '$safeName', '$safeMime');
+                      }
+                    };
+                    reader.readAsDataURL(xhr.response);
+                  }
+                };
+                xhr.send();
+              }catch(e){}
+            })();
+        """.trimIndent()
     }
 }

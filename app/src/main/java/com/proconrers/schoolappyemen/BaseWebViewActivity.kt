@@ -12,6 +12,7 @@ import android.webkit.*
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.proconrers.schoolappyemen.databinding.ActivityWebviewBinding
 
 /**
@@ -19,14 +20,13 @@ import com.proconrers.schoolappyemen.databinding.ActivityWebviewBinding
  *
  * يوحّد كل منطق الـ WebView في مكان واحد (كان مكرّراً حرفياً بين النشاطين):
  *   - الإعدادات الموحّدة + الكوكيز
- *   - شريط التقدّم + رفع الملفات (onShowFileChooser, متعدّد الملفات)
- *   - تنزيل الملفات (DownloadListener)
+ *   - شريط التقدّم + رفع الملفات (متعدّد) + تنزيل الملفات (يشمل blob/Excel)
  *   - معالجة SSL للنطاقات الموثوقة
  *   - صفحة خطأ بإعادة محاولة **حقيقية** عبر جسر AndroidApp
  *   - تجاهل أخطاء الموارد الفرعية (لا نُخفي الصفحة كاملةً لفشل صورة)
  *   - سحب-للتحديث (SwipeRefresh)
  *   - الصمود عند انهيار محرّك عرض WebView (onRenderProcessGone)
- *   - زرّ الرجوع + دورة حياة WebView
+ *   - **وعي بالاتصال**: فحص مسبق + إعادة تحميل تلقائية عند عودة الإنترنت
  *
  * كل نشاط فرعي يحدّد فقط: [startUrl] و[logTag] ومنطق [routeUrl].
  */
@@ -35,6 +35,8 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
     protected lateinit var binding: ActivityWebviewBinding
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private var lastFailedUrl: String? = null
+    private var showingError = false
+    private lateinit var netController: NetworkReloadController
 
     /** الرابط الأولي الذي يُحمَّل عند فتح الشاشة. */
     protected abstract val startUrl: String
@@ -73,9 +75,21 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         binding = ActivityWebviewBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        netController = NetworkReloadController(this) { onNetworkAvailable() }
+
         setupWebView()
-        binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }
-        binding.webView.loadUrl(startUrl)
+        binding.swipeRefresh.setColorSchemeColors(
+            ContextCompat.getColor(this, R.color.progress_indicator_color)
+        )
+        binding.swipeRefresh.setOnRefreshListener { loadTarget(binding.webView.url ?: startUrl) }
+
+        // فحص مسبق للاتصال: إن لا إنترنت، أظهِر صفحة الخطأ فوراً بدل تحميل فاشل
+        if (WebViewSupport.isOnline(this)) {
+            loadTarget(startUrl)
+        } else {
+            lastFailedUrl = startUrl
+            showError(sslError = false)
+        }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -90,18 +104,14 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(binding.webView, true)
 
-        // جسر إعادة المحاولة الحقيقية (يحمّل الرابط الأصلي لا صفحة الخطأ)
-        binding.webView.addJavascriptInterface(object {
-            @JavascriptInterface
-            fun retry() {
-                runOnUiThread { binding.webView.loadUrl(lastFailedUrl ?: startUrl) }
-            }
-        }, WebViewSupport.JS_BRIDGE)
+        // جسر JS: إعادة محاولة حقيقية + حفظ ملفات blob (تصدير Excel)
+        binding.webView.addJavascriptInterface(
+            SchoolJsBridge(this, binding.webView) { lastFailedUrl ?: startUrl },
+            WebViewSupport.JS_BRIDGE
+        )
 
-        // تنزيل الملفات (تصدير الدرجات/الجداول…)
-        binding.webView.setDownloadListener { url, ua, cd, mime, _ ->
-            WebViewSupport.handleDownload(this, url, ua, cd, mime)
-        }
+        // تنزيل الملفات (http عبر DownloadManager، blob عبر الجسر)
+        WebViewSupport.installDownloadHandler(binding.webView, this)
 
         binding.webView.webChromeClient = object : WebChromeClient() {
             override fun onShowFileChooser(
@@ -141,6 +151,8 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 binding.progressBar.visibility = View.GONE
                 binding.swipeRefresh.isRefreshing = false
+                // صفحة حقيقية حُمّلت بنجاح → ألغِ حالة الخطأ
+                if (url != null && url.startsWith("http")) showingError = false
             }
 
             override fun shouldOverrideUrlLoading(
@@ -204,17 +216,34 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         }
     }
 
+    /** يحمّل رابطاً حقيقياً ويُلغي حالة الخطأ. */
+    private fun loadTarget(url: String) {
+        showingError = false
+        binding.webView.loadUrl(url)
+    }
+
+    /** عند عودة الاتصال: إن كنا على صفحة خطأ، أعِد التحميل تلقائياً. */
+    private fun onNetworkAvailable() {
+        if (showingError) {
+            android.widget.Toast.makeText(
+                this, "تمت استعادة الاتصال — جارٍ إعادة التحميل", android.widget.Toast.LENGTH_SHORT
+            ).show()
+            loadTarget(lastFailedUrl ?: startUrl)
+        }
+    }
+
     private fun stopIndicators() {
         binding.progressBar.visibility = View.GONE
         binding.swipeRefresh.isRefreshing = false
     }
 
     private fun showError(sslError: Boolean) {
+        showingError = true
         val title = if (sslError) "خطأ في الاتصال الآمن" else "عذراً، تعذّر تحميل الصفحة"
         val body = if (sslError) {
             "تعذّر التحقق من أمان الاتصال بالخادم. إذا استمرت المشكلة تواصل مع الدعم الفني."
         } else {
-            "تأكد من اتصالك بالإنترنت ثم اضغط إعادة المحاولة."
+            "تأكد من اتصالك بالإنترنت. سنعيد التحميل تلقائياً عند عودة الاتصال، أو اضغط إعادة المحاولة."
         }
         binding.webView.loadDataWithBaseURL(
             null,
@@ -235,11 +264,13 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         binding.webView.onResume()
+        netController.start()
     }
 
     override fun onPause() {
         super.onPause()
         binding.webView.onPause()
+        netController.stop()
     }
 
     override fun onDestroy() {

@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.content.ContextCompat
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.proconrers.schoolappyemen.databinding.ActivityMainBinding
 
@@ -39,6 +40,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private var lastFailedUrl: String? = null
+    private var showingError = false
+    private lateinit var netController: NetworkReloadController
 
     private val mainUrl: String get() = AppConfig.HOME_URL
 
@@ -78,9 +81,18 @@ class MainActivity : AppCompatActivity() {
 
         buildViews()
         setupWebView()
+        netController = NetworkReloadController(this) { onNetworkAvailable() }
+        swipeRefresh.setColorSchemeColors(
+            ContextCompat.getColor(this, R.color.progress_indicator_color)
+        )
 
         Log.d(TAG, "Loading HOME URL: $mainUrl")
-        webView.loadUrl(mainUrl)
+        if (WebViewSupport.isOnline(this)) {
+            loadTarget(mainUrl)
+        } else {
+            lastFailedUrl = mainUrl
+            showError(sslError = false)
+        }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -100,7 +112,7 @@ class MainActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
             )
             addView(webView)
-            setOnRefreshListener { webView.reload() }
+            setOnRefreshListener { loadTarget(webView.url ?: mainUrl) }
         }
         binding.mainContainer.addView(swipeRefresh)
 
@@ -116,16 +128,12 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
         WebViewSupport.applyDefaults(webView)
 
-        webView.addJavascriptInterface(object {
-            @JavascriptInterface
-            fun retry() {
-                runOnUiThread { webView.loadUrl(lastFailedUrl ?: mainUrl) }
-            }
-        }, WebViewSupport.JS_BRIDGE)
+        webView.addJavascriptInterface(
+            SchoolJsBridge(this, webView) { lastFailedUrl ?: mainUrl },
+            WebViewSupport.JS_BRIDGE
+        )
 
-        webView.setDownloadListener { url, ua, cd, mime, _ ->
-            WebViewSupport.handleDownload(this, url, ua, cd, mime)
-        }
+        WebViewSupport.installDownloadHandler(webView, this)
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onShowFileChooser(
@@ -186,6 +194,7 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 progressBar.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
+                if (url != null && url.startsWith("http")) showingError = false
             }
 
             @SuppressLint("WebViewClientOnReceivedSslError")
@@ -236,12 +245,27 @@ class MainActivity : AppCompatActivity() {
         swipeRefresh.isRefreshing = false
     }
 
+    private fun loadTarget(url: String) {
+        showingError = false
+        webView.loadUrl(url)
+    }
+
+    private fun onNetworkAvailable() {
+        if (showingError) {
+            android.widget.Toast.makeText(
+                this, "تمت استعادة الاتصال — جارٍ إعادة التحميل", android.widget.Toast.LENGTH_SHORT
+            ).show()
+            loadTarget(lastFailedUrl ?: mainUrl)
+        }
+    }
+
     private fun showError(sslError: Boolean) {
+        showingError = true
         val title = if (sslError) "خطأ في الاتصال الآمن" else "عذراً، تعذّر الاتصال"
         val body = if (sslError) {
             "تعذّر التحقق من أمان الاتصال بالخادم. إذا استمرت المشكلة تواصل مع الدعم الفني."
         } else {
-            "تأكد من اتصالك بالإنترنت ثم اضغط إعادة المحاولة."
+            "تأكد من اتصالك بالإنترنت. سنعيد التحميل تلقائياً عند عودة الاتصال، أو اضغط إعادة المحاولة."
         }
         webView.loadDataWithBaseURL(
             null,
@@ -253,11 +277,13 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         webView.onResume()
+        netController.start()
     }
 
     override fun onPause() {
         super.onPause()
         webView.onPause()
+        netController.stop()
     }
 
     override fun onDestroy() {
