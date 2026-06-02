@@ -3,54 +3,62 @@ package com.proconrers.schoolappyemen
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
 import android.util.Log
-import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.ProgressBar
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.proconrers.schoolappyemen.databinding.ActivityMainBinding
 
 /**
- * MainActivity — بوابة الدخول الرئيسية لمنظومة مدارس الإبداع والتميز.
+ * MainActivity — بوابة الدخول الرئيسية (الموقع الرسمي العام للمدرسة).
  *
- * ─── المسؤولية ─────────────────────────────────────────────────────────────
- * تعرض **الموقع الرسمي العام للمدرسة** (Code.gs / Index.html):
- *   - الأخبار، الصور، الفيديوهات، الإحصائيات
- *   - أزرار الانتقال إلى منصة المعلمين / الطلاب / CMS
+ * يعرض HOME_URL (الأخبار/الصور/الإحصائيات + أزرار المنصات). التوجيه:
+ *   - الموقع الرسمي / CMS  → يبقى داخل هذا الـ WebView
+ *   - منصة المعلمين/الطلاب → يفتح النشاط المخصّص
+ *   - نطاقات Google         → يبقى داخل WebView (إعادة توجيه Apps Script)
+ *   - أي رابط خارجي         → متصفح النظام
  *
- * ─── سبب التغيير الجوهري (مهم) ────────────────────────────────────────────
- * النسخة السابقة كانت تحمّل `AppConfig.CMS_URL` تلقائياً عند الإقلاع، فيرى
- * المستخدم العادي صفحة إدارة المحتوى بدلاً من الموقع الرسمي الذي يخدم الزوار
- * وأولياء الأمور والطلاب. النسخة الحالية تحمّل `AppConfig.HOME_URL` افتراضياً،
- * وتفتح CMS فقط حين يطلبه المستخدم صراحةً عبر روابط داخل الموقع.
- *
- * ─── منطق التوجيه (shouldOverrideUrlLoading) ──────────────────────────────
- *   - رابط الموقع الرسمي  → يبقى داخل MainActivity (false)
- *   - رابط منصة المعلمين  → يفتح TeacherActivity
- *   - رابط منصة الطلاب    → يفتح StudentActivity
- *   - رابط CMS            → يبقى داخل MainActivity (نفس الـ WebView)
- *   - نطاقات Google موثوقة → يبقى داخل WebView (إعادة توجيه Apps Script)
- *   - أي رابط خارجي آخر    → يفتح في متصفح النظام
+ * المنطق المشترك (إعدادات، تنزيل، صفحة خطأ، إعادة محاولة) في [WebViewSupport].
  */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
+    private lateinit var swipeRefresh: SwipeRefreshLayout
+    private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
+    private var lastFailedUrl: String? = null
 
-    /**
-     * الرابط الرئيسي الذي يُحمَّل عند بدء التطبيق.
-     * ⭐ تم التغيير من CMS_URL إلى HOME_URL ليعرض الموقع الرسمي للمدرسة.
-     * AppConfig يقرأ القيمة من SharedPreferences (المُحدَّثة من الخادم تلقائياً).
-     */
     private val mainUrl: String get() = AppConfig.HOME_URL
+
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val cb = fileUploadCallback ?: return@registerForActivityResult
+        val data = result.data
+        val results: Array<Uri>? =
+            if (result.resultCode == RESULT_OK && data != null) {
+                val clip = data.clipData
+                when {
+                    clip != null -> Array(clip.itemCount) { clip.getItemAt(it).uri }
+                    data.data != null -> arrayOf(data.data!!)
+                    else -> null
+                }
+            } else null
+        cb.onReceiveValue(results)
+        fileUploadCallback = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -58,94 +66,111 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // ضمان تهيئة AppConfig (في حال جاء المستخدم من خارج SplashActivity)
         AppConfig.init(applicationContext)
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.mainContainer) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
 
         CookieManager.getInstance().setAcceptCookie(true)
 
-        initViews()
+        buildViews()
         setupWebView()
 
-        // ⭐ تحميل الموقع الرسمي للمدرسة (وليس CMS)
         Log.d(TAG, "Loading HOME URL: $mainUrl")
         webView.loadUrl(mainUrl)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) webView.goBack() else finish()
+            }
+        })
     }
 
-    private fun initViews() {
+    private fun buildViews() {
         webView = WebView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
             )
         }
-        binding.mainContainer.addView(webView)
+        swipeRefresh = SwipeRefreshLayout(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            addView(webView)
+            setOnRefreshListener { webView.reload() }
+        }
+        binding.mainContainer.addView(swipeRefresh)
 
         progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             visibility = View.GONE
+            max = 100
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 12)
         }
         binding.mainContainer.addView(progressBar)
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     private fun setupWebView() {
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            allowFileAccess = true
-            allowContentAccess = true
-            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            cacheMode = WebSettings.LOAD_DEFAULT
-            // علامتا "wv" و "SchoolAppYemen" تُستخدمان من JavaScript للكشف
-            // عن WebView وإلغاء target=_blank وضبط السلوك الديناميكي
-            userAgentString = "Mozilla/5.0 (Linux; Android 13; wv; SchoolAppYemen/1.0) " +
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 " +
-                    "Chrome/119.0.0.0 Mobile Safari/537.36"
+        WebViewSupport.applyDefaults(webView)
+
+        webView.addJavascriptInterface(object {
+            @JavascriptInterface
+            fun retry() {
+                runOnUiThread { webView.loadUrl(lastFailedUrl ?: mainUrl) }
+            }
+        }, WebViewSupport.JS_BRIDGE)
+
+        webView.setDownloadListener { url, ua, cd, mime, _ ->
+            WebViewSupport.handleDownload(this, url, ua, cd, mime)
+        }
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                view: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                fileUploadCallback?.onReceiveValue(null)
+                fileUploadCallback = filePathCallback
+                val intent = fileChooserParams?.createIntent()
+                return if (intent != null) {
+                    try {
+                        fileChooserLauncher.launch(intent); true
+                    } catch (e: Exception) {
+                        fileUploadCallback = null; false
+                    }
+                } else {
+                    fileUploadCallback = null; false
+                }
+            }
+
+            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                progressBar.progress = newProgress
+            }
         }
 
         webView.webViewClient = object : WebViewClient() {
-
-            // ─── ⭐ التوجيه الذكي للروابط ───
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
-                Log.d(TAG, "shouldOverride: $url")
-
                 return when {
-                    // الرابط يخص الموقع الرسمي → نبقى داخل MainActivity
                     AppConfig.isHomeUrl(url) -> false
-
-                    // الرابط يخص منصة المعلمين → نفتح TeacherActivity
                     AppConfig.isTeacherUrl(url) -> {
-                        startActivity(Intent(this@MainActivity, TeacherActivity::class.java))
-                        true
+                        startActivity(Intent(this@MainActivity, TeacherActivity::class.java)); true
                     }
-
-                    // الرابط يخص منصة الطلاب → نفتح StudentActivity
                     AppConfig.isStudentUrl(url) -> {
-                        startActivity(Intent(this@MainActivity, StudentActivity::class.java))
-                        true
+                        startActivity(Intent(this@MainActivity, StudentActivity::class.java)); true
                     }
-
-                    // الرابط يخص CMS → نبقى داخل WebView نفسه (ضمن MainActivity)
-                    // المستخدم اختار الانتقال صراحةً عبر زر/رابط
                     AppConfig.isCmsUrl(url) -> false
-
-                    // نطاقات Google الموثوقة (إعادة توجيه Apps Script، صور Drive، …)
-                    url.contains("google.com") || url.contains("googleusercontent.com") -> false
-
-                    // أي رابط خارجي آخر → يُفتح في متصفح النظام
+                    WebViewSupport.isGoogleDomain(url) -> false
                     else -> {
                         try {
-                            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                         } catch (e: Exception) {
                             Log.e(TAG, "Cannot open external URL: $url", e)
                         }
@@ -160,24 +185,24 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 progressBar.visibility = View.GONE
+                swipeRefresh.isRefreshing = false
             }
 
-            // ─── معالجة SSL — نطاقات Google الموثوقة فقط ───
             @SuppressLint("WebViewClientOnReceivedSslError")
             override fun onReceivedSslError(
                 view: WebView?,
                 handler: SslErrorHandler?,
                 error: SslError?
             ) {
-                val failingUrl = error?.url ?: view?.url ?: ""
-                if (AppConfig.isTrustedSslDomain(failingUrl)) {
-                    Log.d(TAG, "SSL accepted for trusted domain: $failingUrl")
+                val failing = error?.url ?: view?.url ?: ""
+                if (AppConfig.isTrustedSslDomain(failing)) {
                     handler?.proceed()
                 } else {
-                    Log.e(TAG, "SSL REJECTED for untrusted domain: $failingUrl " +
-                            "| Error: ${error?.primaryError}")
                     handler?.cancel()
-                    showSslErrorPage(failingUrl)
+                    Log.e(TAG, "SSL REJECTED: $failing")
+                    lastFailedUrl = failing.ifBlank { mainUrl }
+                    stopIndicators()
+                    showError(sslError = true)
                 }
             }
 
@@ -186,68 +211,44 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
-                if (request?.isForMainFrame == true) {
-                    Log.e(TAG, "Page load error: ${error?.errorCode} — ${error?.description}")
-                    showErrorPage()
-                }
+                if (request?.isForMainFrame != true) return
+                Log.e(TAG, "Error ${error?.errorCode}: ${error?.description}")
+                lastFailedUrl = request.url?.toString() ?: mainUrl
+                stopIndicators()
+                showError(sslError = false)
+            }
+
+            override fun onRenderProcessGone(
+                view: WebView?,
+                detail: RenderProcessGoneDetail?
+            ): Boolean {
+                Log.e(TAG, "Render process gone (crashed=${detail?.didCrash()})")
+                (webView.parent as? ViewGroup)?.removeView(webView)
+                webView.destroy()
+                recreate()
+                return true
             }
         }
     }
 
-    // ─── صفحات الخطأ ────────────────────────────────────────────────────────
-
-    private fun showErrorPage() {
-        val html = buildErrorHtml(
-            title = "عذراً، تعذر الاتصال",
-            body = "يرجى التأكد من اتصالك بالإنترنت ثم حاول مجدداً.",
-            showRetry = true
-        )
-        webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+    private fun stopIndicators() {
+        progressBar.visibility = View.GONE
+        swipeRefresh.isRefreshing = false
     }
 
-    private fun showSslErrorPage(@Suppress("UNUSED_PARAMETER") url: String) {
-        val html = buildErrorHtml(
-            title = "تحذير: خطأ في الاتصال الآمن",
-            body = "لم يتمكن التطبيق من التحقق من أمان الاتصال بالخادم.\n" +
-                    "إذا استمرت المشكلة، تواصل مع الدعم الفني.",
-            showRetry = false
-        )
-        webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
-    }
-
-    private fun buildErrorHtml(title: String, body: String, showRetry: Boolean): String {
-        val retryButton = if (showRetry) {
-            "<button onclick='location.reload()' " +
-                    "style='padding:12px 30px;background:#0f3b5c;color:white;" +
-                    "border:none;border-radius:25px;font-size:16px;cursor:pointer;" +
-                    "margin-top:16px;'>إعادة المحاولة</button>"
-        } else ""
-
-        return """
-            <html dir='rtl'>
-            <head><meta name='viewport' content='width=device-width, initial-scale=1'></head>
-            <body style='text-align:center;padding:60px 24px;font-family:sans-serif;
-                         background:#f8fafc;color:#334155;'>
-                <div style='font-size:50px;margin-bottom:16px;'>⚠️</div>
-                <h2 style='color:#e76f51;margin-bottom:12px;'>$title</h2>
-                <p style='font-size:15px;line-height:1.6;color:#64748b;'>$body</p>
-                $retryButton
-            </body>
-            </html>
-        """.trimIndent()
-    }
-
-    // ─── زر الرجوع ─────────────────────────────────────────────────────────
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
-            webView.goBack()
-            return true
+    private fun showError(sslError: Boolean) {
+        val title = if (sslError) "خطأ في الاتصال الآمن" else "عذراً، تعذّر الاتصال"
+        val body = if (sslError) {
+            "تعذّر التحقق من أمان الاتصال بالخادم. إذا استمرت المشكلة تواصل مع الدعم الفني."
+        } else {
+            "تأكد من اتصالك بالإنترنت ثم اضغط إعادة المحاولة."
         }
-        return super.onKeyDown(keyCode, event)
+        webView.loadDataWithBaseURL(
+            null,
+            WebViewSupport.errorPageHtml(title, body, showRetry = !sslError),
+            "text/html", "UTF-8", null
+        )
     }
-
-    // ─── دورة حياة WebView ─────────────────────────────────────────────────
 
     override fun onResume() {
         super.onResume()

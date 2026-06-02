@@ -1,14 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     activity_webview.xml
-    Shared layout for TeacherActivity and StudentActivity.
+    Layout مشترك لـ TeacherActivity و StudentActivity (عبر BaseWebViewActivity).
 
-    FIX: Replaced circular ProgressBar (which ignored .progress = N values)
-    with a horizontal LinearProgressIndicator from Material 3.
-    The indicator sits at the very top of the screen, 3dp tall, and animates
-    smoothly from 0–100 as the page loads via onProgressChanged().
-
-    The WebView fills the remaining screen below the progress bar.
+    - SwipeRefreshLayout يلفّ الـ WebView لإتاحة «السحب للتحديث».
+    - LinearProgressIndicator (Material) شريط تقدّم أفقي رفيع (3dp) أعلى الشاشة،
+      يظهر أثناء التحميل (onPageStarted → onPageFinished) ويتحرّك 0–100.
 -->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -16,11 +13,24 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!--
-        Horizontal page load indicator.
-        Visible only during page load (onPageStarted → onPageFinished).
-        Height 3dp matches browser-standard thin progress bar aesthetic.
-    -->
+    <!-- السحب للتحديث + الـ WebView بداخله -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefresh"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <WebView
+            android:id="@+id/webView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <!-- مؤشّر التحميل الأفقي — يعلو فوق الـ WebView في الأعلى -->
     <com.google.android.material.progressindicator.LinearProgressIndicator
         android:id="@+id/progressBar"
         android:layout_width="0dp"
@@ -32,19 +42,6 @@
         app:trackColor="@android:color/transparent"
         app:trackCornerRadius="0dp"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <!--
-        WebView fills the full screen.
-        Constrained below the progress bar so the bar overlays it at the top.
-    -->
-    <WebView
-        android:id="@+id/webView"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
