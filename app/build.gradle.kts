@@ -10,14 +10,14 @@ plugins {
 
 android {
     namespace = "com.proconrers.schoolappyemen"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.proconrers.schoolappyemen"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 24
-        versionName = "2.1"
+        targetSdk = 36
+        versionCode = 25
+        versionName = "2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
