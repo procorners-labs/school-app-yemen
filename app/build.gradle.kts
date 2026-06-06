@@ -1,6 +1,11 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// app/build.gradle.kts — SchoolApp Yemen
+// جميع الإصدارات مُدارة عبر gradle/libs.versions.toml (version catalog)
+// ═══════════════════════════════════════════════════════════════════════════
+
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.jetbrains.kotlin.android)
 }
 
 android {
@@ -45,37 +50,33 @@ android {
         buildConfig = true
         viewBinding = true
     }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
 }
 
 dependencies {
-    // Core
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.appcompat:appcompat:1.7.0")
+    // ── Core ──────────────────────────────────────────────────────────────
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.core.splashscreen)
 
-    // ── Priority 7: AndroidX Splash Screen API ─────────────────────────────
-    // Required for SplashActivity migration from Handler.postDelayed.
-    // Backports the Android 12+ splash screen to API 24+.
-    implementation("androidx.core:core-splashscreen:1.0.1")
+    // ── UI ────────────────────────────────────────────────────────────────
+    implementation(libs.material)
+    implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.swiperefreshlayout)
 
-    // UI
-    implementation("com.google.android.material:material:1.12.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.2.0")
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    // ── Support ───────────────────────────────────────────────────────────
+    implementation(libs.androidx.multidex)
+    implementation(libs.androidx.webkit)
+    implementation(libs.androidx.activity.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
 
-    // MultiDex
-    implementation("androidx.multidex:multidex:2.0.1")
-
-    // WebView
-    implementation("androidx.webkit:webkit:1.12.1")
-
-    // Activity (enableEdgeToEdge + OnBackPressedDispatcher)
-    implementation("androidx.activity:activity-ktx:1.9.3")
-
-    // Lifecycle (coroutineScope للـ SplashActivity)
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-
-    // Testing
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    // ── Testing ───────────────────────────────────────────────────────────
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }

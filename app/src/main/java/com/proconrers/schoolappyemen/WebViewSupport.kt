@@ -45,8 +45,9 @@ object WebViewSupport {
     fun applyDefaults(webView: WebView) {
         webView.settings.apply {
             javaScriptEnabled = true
+            // domStorageEnabled يُفعّل: localStorage + sessionStorage + IndexedDB (offline-db.js)
+            // ملاحظة: databaseEnabled (Web SQL) محذوف — deprecated في API 30 وغير مطلوب
             domStorageEnabled = true
-            databaseEnabled = true          // مطلوب لـ IndexedDB في offline-db.js
             allowFileAccess = true
             allowContentAccess = true
             setSupportZoom(true)
@@ -56,7 +57,7 @@ object WebViewSupport {
             useWideViewPort = true
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            // LOAD_CACHE_ELSE_NETWORK: يُقلّل الطلبات الشبكية ويُسرّع التحميل
+            // LOAD_CACHE_ELSE_NETWORK: يُقلّل الطلبات الشبكية ويُسرّع التحميل offline
             cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
             userAgentString = USER_AGENT
         }
