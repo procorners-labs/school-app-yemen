@@ -10,12 +10,12 @@ plugins {
 
 android {
     namespace = "com.proconrers.schoolappyemen"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.proconrers.schoolappyemen"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 25
         versionName = "2.2"
 
