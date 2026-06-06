@@ -1,6 +1,7 @@
 package com.proconrers.schoolappyemen
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
@@ -10,8 +11,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.ContextCompat
 import com.proconrers.schoolappyemen.databinding.ActivityWebviewBinding
 
@@ -35,6 +40,7 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
     protected lateinit var binding: ActivityWebviewBinding
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private var lastFailedUrl: String? = null
+    private var lastLoggedInUrl: String? = null
     private var showingError = false
     private lateinit var netController: NetworkReloadController
 
@@ -70,10 +76,21 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         AppConfig.init(applicationContext)
         binding = ActivityWebviewBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // تطبيق padding ديناميكي للـ system bars + لوحة المفاتيح
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
+            )
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
 
         netController = NetworkReloadController(this) { onNetworkAvailable() }
 
@@ -81,7 +98,14 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         binding.swipeRefresh.setColorSchemeColors(
             ContextCompat.getColor(this, R.color.progress_indicator_color)
         )
-        binding.swipeRefresh.setOnRefreshListener { loadTarget(binding.webView.url ?: startUrl) }
+        // استخدم lastLoggedInUrl عند التحديث لتجنّب العودة لصفحة الدخول
+        binding.swipeRefresh.setOnRefreshListener {
+            val target = binding.webView.url
+                ?.takeIf { it.startsWith("http") }
+                ?: lastLoggedInUrl
+                ?: startUrl
+            loadTarget(target)
+        }
 
         // فحص مسبق للاتصال: إن لا إنترنت، أظهِر صفحة الخطأ فوراً بدل تحميل فاشل
         if (WebViewSupport.isOnline(this)) {
@@ -93,9 +117,42 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (binding.webView.canGoBack()) binding.webView.goBack() else finish()
+                if (binding.webView.canGoBack()) {
+                    binding.webView.goBack()
+                } else {
+                    // لا يوجد تاريخ تنقل — تحقّق من حالة الجلسة عبر JS
+                    binding.webView.evaluateJavascript(
+                        "(function(){ " +
+                        "  var t = (typeof App!=='undefined'&&App.token); " +
+                        "  var u = (typeof APP!=='undefined'&&APP.user); " +
+                        "  return (t||u)?'logged':'guest'; " +
+                        "})()"
+                    ) { result ->
+                        val loggedIn = result?.replace("\"", "") == "logged"
+                        if (loggedIn) showLogoutConfirmDialog()
+                        else finish()
+                    }
+                }
             }
         })
+    }
+
+    private fun showLogoutConfirmDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("تسجيل الخروج")
+            .setMessage("هل تريد الخروج من حسابك؟")
+            .setPositiveButton("نعم، أخرج") { _, _ ->
+                binding.webView.evaluateJavascript(
+                    "if(typeof doLogout==='function')doLogout();" +
+                    "else if(typeof confirmLogout==='function')confirmLogout();",
+                    null
+                )
+                binding.webView.clearHistory()
+                finish()
+            }
+            .setNegativeButton("لا، ابقَ") { dialog, _ -> dialog.dismiss() }
+            .setCancelable(true)
+            .show()
     }
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
@@ -151,8 +208,13 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 binding.progressBar.visibility = View.GONE
                 binding.swipeRefresh.isRefreshing = false
-                // صفحة حقيقية حُمّلت بنجاح → ألغِ حالة الخطأ
-                if (url != null && url.startsWith("http")) showingError = false
+                if (url != null && url.startsWith("http")) {
+                    showingError = false
+                    // حفظ آخر URL حقيقي (ليس loginScreen) لاستخدامه عند التحديث
+                    if (!url.contains("loginScreen") && url != startUrl) {
+                        lastLoggedInUrl = url
+                    }
+                }
             }
 
             override fun shouldOverrideUrlLoading(

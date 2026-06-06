@@ -11,8 +11,8 @@ android {
         applicationId = "com.proconrers.schoolappyemen"
         minSdk = 24
         targetSdk = 35
-        versionCode = 23
-        versionName = "2.0"
+        versionCode = 24
+        versionName = "2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
@@ -68,8 +68,11 @@ dependencies {
     // WebView
     implementation("androidx.webkit:webkit:1.12.1")
 
-    // Activity (enableEdgeToEdge)
-    implementation("androidx.activity:activity-compose:1.9.3")
+    // Activity (enableEdgeToEdge + OnBackPressedDispatcher)
+    implementation("androidx.activity:activity-ktx:1.9.3")
+
+    // Lifecycle (coroutineScope للـ SplashActivity)
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

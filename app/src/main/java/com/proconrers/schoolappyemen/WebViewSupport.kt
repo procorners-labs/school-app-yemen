@@ -46,6 +46,7 @@ object WebViewSupport {
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
+            databaseEnabled = true          // مطلوب لـ IndexedDB في offline-db.js
             allowFileAccess = true
             allowContentAccess = true
             setSupportZoom(true)
@@ -55,7 +56,8 @@ object WebViewSupport {
             useWideViewPort = true
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            cacheMode = WebSettings.LOAD_DEFAULT
+            // LOAD_CACHE_ELSE_NETWORK: يُقلّل الطلبات الشبكية ويُسرّع التحميل
+            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
             userAgentString = USER_AGENT
         }
         webView.isScrollbarFadingEnabled = true

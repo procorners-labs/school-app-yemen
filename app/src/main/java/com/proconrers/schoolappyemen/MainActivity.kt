@@ -1,6 +1,7 @@
 package com.proconrers.schoolappyemen
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -16,6 +17,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.ContextCompat
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -68,11 +70,14 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         AppConfig.init(applicationContext)
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.mainContainer) { v, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
+            )
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
@@ -96,7 +101,16 @@ class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) webView.goBack() else finish()
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("الخروج")
+                        .setMessage("هل تريد الخروج من التطبيق؟")
+                        .setPositiveButton("نعم") { _, _ -> finish() }
+                        .setNegativeButton("لا") { d, _ -> d.dismiss() }
+                        .show()
+                }
             }
         })
     }

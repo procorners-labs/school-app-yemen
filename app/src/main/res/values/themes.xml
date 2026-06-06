@@ -9,6 +9,7 @@
         <item name="colorPrimary">@color/brand_primary</item>
         <item name="colorAccent">@color/brand_accent</item>
         <item name="android:windowBackground">@color/ic_launcher_background</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">false</item>
     </style>
 
     <!--
