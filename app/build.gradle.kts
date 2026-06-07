@@ -3,10 +3,17 @@
 // جميع الإصدارات مُدارة عبر gradle/libs.versions.toml (version catalog)
 // ═══════════════════════════════════════════════════════════════════════════
 
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
 }
+
+// Load signing credentials from keystore.properties (never committed to git)
+val keystoreProps = Properties()
+val keystoreFile = rootProject.file("keystore.properties")
+if (keystoreFile.exists()) keystoreProps.load(keystoreFile.inputStream())
 
 android {
     namespace = "com.proconrers.schoolappyemen"
@@ -23,10 +30,22 @@ android {
         multiDexEnabled = true
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystoreProps.isNotEmpty()) {
+                storeFile     = file(keystoreProps["storeFile"] as String)
+                storePassword = keystoreProps["storePassword"] as String
+                keyAlias      = keystoreProps["keyAlias"] as String
+                keyPassword   = keystoreProps["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = true
+            isMinifyEnabled   = true
             isShrinkResources = true
+            signingConfig     = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
