@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
+import android.os.Message
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -149,6 +150,9 @@ class MainActivity : AppCompatActivity() {
 
         WebViewSupport.installDownloadHandler(webView, this)
 
+        // شبكة أمان: target="_blank" تُعالَج عبر onCreateWindow
+        webView.settings.setSupportMultipleWindows(true)
+
         webView.webChromeClient = object : WebChromeClient() {
             override fun onShowFileChooser(
                 view: WebView?,
@@ -171,6 +175,43 @@ class MainActivity : AppCompatActivity() {
 
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 progressBar.progress = newProgress
+            }
+
+            /**
+             * شبكة أمان لروابط target="_blank" التي لم تُعالَج بـ shouldOverrideUrlLoading.
+             * نستخرج الـ URL ونوجّه النشاط المناسب (المعلمين / الطلاب / خارجي).
+             */
+            override fun onCreateWindow(
+                view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?
+            ): Boolean {
+                val transportWebView = WebView(this@MainActivity)
+                transportWebView.settings.javaScriptEnabled = true
+                transportWebView.webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(v: WebView?, url: String?, fav: Bitmap?) {
+                        url ?: return
+                        // وقف التحميل فور معرفة الـ URL
+                        transportWebView.stopLoading()
+                        transportWebView.destroy()
+                        // توجيه نفس الـ URL كما لو كانت نقرة عادية
+                        when {
+                            AppConfig.isTeacherUrl(url) ->
+                                startActivity(Intent(this@MainActivity, TeacherActivity::class.java))
+                            AppConfig.isStudentUrl(url) ->
+                                startActivity(Intent(this@MainActivity, StudentActivity::class.java))
+                            url.startsWith("http") && !AppConfig.isHomeUrl(url) &&
+                                    !AppConfig.isCmsUrl(url) -> try {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Cannot open: $url", e)
+                            }
+                        }
+                    }
+                }
+                (resultMsg?.obj as? WebView.WebViewTransport)?.also { transport ->
+                    transport.webView = transportWebView
+                    resultMsg.sendToTarget()
+                }
+                return true
             }
         }
 
@@ -286,6 +327,18 @@ class MainActivity : AppCompatActivity() {
             WebViewSupport.errorPageHtml(title, body, showRetry = !sslError),
             "text/html", "UTF-8", null
         )
+    }
+
+    /**
+     * يُستدعى عند العودة من TeacherActivity / StudentActivity عبر navigateToMain()
+     * (FLAG_ACTIVITY_CLEAR_TOP | FLAG_ACTIVITY_SINGLE_TOP). نُعيد تحميل الصفحة الرئيسية
+     * لضمان حالة نظيفة: JavaScript UA-fix يعمل من جديد والأزرار جاهزة للنقر.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        Log.d(TAG, "onNewIntent: reloading home for fresh state")
+        loadTarget(mainUrl)
     }
 
     override fun onResume() {
