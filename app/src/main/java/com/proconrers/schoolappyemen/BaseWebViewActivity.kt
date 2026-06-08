@@ -121,20 +121,39 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
                     binding.webView.goBack()
                 } else {
                     // لا يوجد تاريخ تنقل — تحقّق من حالة الجلسة عبر JS
+                    // إصلاح: App.user (منصة المعلم) و APP.user (منصة الطالب)
+                    // App.token لم يكن موجوداً في منصة المعلم → الـ dialog لم يظهر أبداً
                     binding.webView.evaluateJavascript(
                         "(function(){ " +
-                        "  var t = (typeof App!=='undefined'&&App.token); " +
-                        "  var u = (typeof APP!=='undefined'&&APP.user); " +
-                        "  return (t||u)?'logged':'guest'; " +
+                        "  var t = (typeof App!=='undefined' && App.user); " +
+                        "  var u = (typeof APP!=='undefined' && APP.user); " +
+                        "  return (t||u) ? 'logged' : 'guest'; " +
                         "})()"
                     ) { result ->
-                        val loggedIn = result?.replace("\"", "") == "logged"
-                        if (loggedIn) showLogoutConfirmDialog()
-                        else finish()
+                        when (result?.replace("\"", "")?.trim()) {
+                            "logged" -> showLogoutConfirmDialog()
+                            "guest"  -> navigateToMain()
+                            // null أو قيمة أخرى = الصفحة لا تزال تحمّل → لا تخرج
+                            else     -> { /* تجاهل — سيُعالج عند الضغط مجدداً */ }
+                        }
                     }
                 }
             }
         })
+    }
+
+    /**
+     * الانتقال الصريح إلى MainActivity بدل مجرد finish() —
+     * يضمن العودة للصفحة الرئيسية حتى لو لم تكن في back stack.
+     */
+    private fun navigateToMain() {
+        startActivity(
+            android.content.Intent(this, MainActivity::class.java).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+        )
+        finish()
     }
 
     private fun showLogoutConfirmDialog() {
@@ -142,13 +161,15 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
             .setTitle("تسجيل الخروج")
             .setMessage("هل تريد الخروج من حسابك؟")
             .setPositiveButton("نعم، أخرج") { _, _ ->
+                // استدعاء دالة الخروج في الصفحة (إن وُجدت)
                 binding.webView.evaluateJavascript(
                     "if(typeof doLogout==='function')doLogout();" +
                     "else if(typeof confirmLogout==='function')confirmLogout();",
                     null
                 )
                 binding.webView.clearHistory()
-                finish()
+                // إصلاح: العودة للصفحة الرئيسية بدل إغلاق التطبيق
+                navigateToMain()
             }
             .setNegativeButton("لا، ابقَ") { dialog, _ -> dialog.dismiss() }
             .setCancelable(true)
