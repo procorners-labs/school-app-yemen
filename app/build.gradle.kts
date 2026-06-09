@@ -23,8 +23,8 @@ android {
         applicationId = "com.proconrers.schoolappyemen"
         minSdk = 24
         targetSdk = 35
-        versionCode = 27
-        versionName = "2.4"
+        versionCode = 28
+        versionName = "2.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
