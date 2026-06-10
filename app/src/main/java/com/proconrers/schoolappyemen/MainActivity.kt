@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private var lastFailedUrl: String? = null
     private var showingError = false
+    private var pendingClearHistory = false
     private lateinit var netController: NetworkReloadController
 
     private val mainUrl: String get() = AppConfig.HOME_URL
@@ -250,6 +251,12 @@ class MainActivity : AppCompatActivity() {
                 progressBar.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
                 if (url != null && url.startsWith("http")) showingError = false
+                // بعد العودة من منصة المعلم/الطالب: امسح سجل التنقل بعد اكتمال
+                // تحميل الرئيسية → زر الرجوع يعرض dialog الخروج مباشرة (حالة نظيفة)
+                if (pendingClearHistory && url != null && url.startsWith("http")) {
+                    pendingClearHistory = false
+                    view?.clearHistory()
+                }
             }
 
             @SuppressLint("WebViewClientOnReceivedSslError")
@@ -338,6 +345,7 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         Log.d(TAG, "onNewIntent: reloading home for fresh state")
+        pendingClearHistory = true
         loadTarget(mainUrl)
     }
 

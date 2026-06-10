@@ -50,15 +50,20 @@ object WebViewSupport {
             domStorageEnabled = true
             allowFileAccess = true
             allowContentAccess = true
-            setSupportZoom(true)
-            builtInZoomControls = true
+            // الزوم معطّل: التكبير غير المقصود كان يقصّ الصفحات من اليمين (RTL)
+            // — منصة الطالب تعطّله أصلاً عبر viewport meta، الآن السلوك موحّد
+            setSupportZoom(false)
+            builtInZoomControls = false
             displayZoomControls = false
             loadWithOverviewMode = true
             useWideViewPort = true
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            // LOAD_CACHE_ELSE_NETWORK: يُقلّل الطلبات الشبكية ويُسرّع التحميل offline
-            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+            // LOAD_DEFAULT يحترم ترويسات HTTP للكاش.
+            // كان LOAD_CACHE_ELSE_NETWORK يقدّم نسخاً قديمة منتهية الصلاحية حتى
+            // مع وجود إنترنت → إصلاحات الويب المنشورة لم تكن تظهر داخل التطبيق
+            // أبداً. العمل دون اتصال يتولاه Service Worker (sw.js) بشكل أصحّ.
+            cacheMode = WebSettings.LOAD_DEFAULT
             userAgentString = USER_AGENT
         }
         webView.isScrollbarFadingEnabled = true
