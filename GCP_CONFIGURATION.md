@@ -7,8 +7,8 @@
 > ملاحظة تاريخية: تطبيق الأندرويد كان يستخدم بالخطأ `app/google-services.json` لمشروع Firebase
 > مختلف تماماً (`mkrh-181cd`) — سُرِّب مفتاح API الخاص به علناً عبر GitHub Secret Scanning
 > (commit `14f5409`). المالك حذف مشروع `mkrh-181cd` بنفسه، وصُحِّح الملف إلى `school-494822`
-> الصحيح (PR #6، مدموج). تنبيه GitHub الأمني #1 لا يزال يحتاج رفضاً يدوياً من المالك
-> (Security → Secret scanning → Alert #1 → Close as Revoked).
+> الصحيح (PR #6، مدموج). ✅ تنبيه GitHub الأمني #1 أُغلق كـ"Revoked" بموافقة صريحة من المالك
+> (2026-07-09).
 
 ## المشاريع/الملفات المرتبطة بـ GCP (عبر Apps Script)
 
@@ -32,10 +32,9 @@
 |---|---|---|---|
 | Android | `1:108410742569:android:cd60f6317dbb3f4714b938` | `com.proconrers.schoolappyemen` | 2026-07-09 (PR #6، يستبدل تسجيل `mkrh-181cd` الخاطئ) |
 
-**متبقٍّ:** إضافة بصمة SHA-1 لهذا التطبيق (Firebase Console → Project Settings → هذا التطبيق →
-Add fingerprint، أو عبر أداة `firebase_create_android_sha` بعد أن يزوّد المالك البصمة الناتجة من
-تشغيله `check-signing.ps1`/`keytool` بنفسه محلياً — لا تُشغَّل هذه الأداة بكلمة مرور الـkeystore
-ظاهرة في سجلّ الأوامر).
+✅ بصمة SHA-256 (`11:E9:B0:2B:1F:26:06:54:04:F8:64:46:51:F8:FA:84:EC:52:DF:3D:0D:11:16:9B:E3:E9:
+E3:40:B7:50:FA:39`) أُضيفت 2026-07-09 عبر `firebase_create_android_sha` — المالك زوّد البصمة عبر
+تشغيل `check-signing.ps1` محلياً (لا تظهر كلمة مرور الـkeystore أبداً خارج الجهاز المحلي).
 
 ## حسابات الخدمة (Service Accounts)
 
