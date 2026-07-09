@@ -64,7 +64,10 @@ https://school-teacher-proxy.procorners-shop.workers.dev/{home,teacher,student,c
   Google Play Console — منفصل تماماً عن `_sync/access-sync.ps1` المالي في `SchoolApp-gas`؛ لا تخلط
   بينهما.
 - إعداد GCP: مشروع `school-494822`، حساب خدمة `teacher-platform-drive@school-494822.iam.gserviceaccount.com`
-  (تفاصيل في `GCP_CONFIGURATION.md` بجذر هذا المستودع).
+  + `play-publisher@school-494822.iam.gserviceaccount.com` (نشر Play) — **`GCP_CONFIGURATION.md`
+  بجذر هذا المستودع هو المرجع الكامل لكل حسابات/مشاريع Google** (Firebase، حسابات الخدمة، وحساب
+  Google Analytics الموجود على مستوى الحساب لكن **غير مُفعَّل عمداً** في أي كود حيّ — لا تقترح
+  ربطه دون طلب صريح).
 
 ---
 
@@ -77,4 +80,4 @@ https://school-teacher-proxy.procorners-shop.workers.dev/{home,teacher,student,c
 - قبل أي رفع فعلي عبر `deploy-to-play.ps1`: تأكيد حيّ من المالك (نفس منطق 🔴 النشر الحيّ في
   `SchoolApp-gas` — رفع إصدار على Play Store عملية يصعب التراجع عنها).
 
-آخر تحديث: 2026-07-09
+آخر تحديث: 2026-07-09 (تحديث توثيق GCP/Analytics)
