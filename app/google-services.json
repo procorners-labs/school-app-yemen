@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "435743942347",
+    "project_id": "mkrh-181cd",
+    "storage_bucket": "mkrh-181cd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:435743942347:android:38b88f1ce2ffd97ef21d4e",
+        "android_client_info": {
+          "package_name": "com.proconrers.schoolappyemen"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCH9ogM5NIFjtb0SH9GuujwSw1r-lCYoJY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

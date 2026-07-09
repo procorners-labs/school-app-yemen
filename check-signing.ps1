@@ -1,43 +1,31 @@
-# ═══════════════════════════════════════════════════════════════════════════
-# check-signing.ps1 — تحقق من صحة التوقيع
-# الاستخدام: .\check-signing.ps1 [path-to-aab]
-# ═══════════════════════════════════════════════════════════════════════════
+param([string]$AabPath = '')
 
-param(
-    [string]$AabPath = ""
-)
+$jbr       = 'C:\Program Files\Android\Android Studio1\jbr\bin'
+$keytool   = Join-Path $jbr 'keytool.exe'
+$jarsigner = Join-Path $jbr 'jarsigner.exe'
 
-$jbr      = "C:\Program Files\Android\Android Studio1\jbr\bin"
-$keytool  = Join-Path $jbr "keytool.exe"
-$jarsigner= Join-Path $jbr "jarsigner.exe"
-
-# --- التحقق من الـ keystore ---
-$keystoreFile = "C:\Users\osama\schoolapp.jks"
-Write-Host ""
-Write-Host "🔑 فحص Keystore" -ForegroundColor Cyan
-Write-Host "───────────────" -ForegroundColor Gray
-if (Test-Path $keystoreFile) {
-    & $keytool -list -keystore $keystoreFile -storepass 123456 -v 2>&1 |
-        Select-String "Alias name|Owner|Serial|Valid from|SHA256"
+Write-Host ''
+Write-Host '=== Keystore Info ===' -ForegroundColor Cyan
+$ksFile = 'C:\Users\osama\schoolapp.jks'
+if (Test-Path $ksFile) {
+    & $keytool -list -keystore $ksFile -storepass 123456 -v 2>&1 |
+        Select-String 'Alias name|Owner|Serial|Valid from|SHA256'
 } else {
-    Write-Host "❌ الملف غير موجود: $keystoreFile" -ForegroundColor Red
+    Write-Host "NOT FOUND: $ksFile" -ForegroundColor Red
 }
 
-# --- التحقق من الـ AAB ---
 if (-not $AabPath) {
-    # ابحث عن أحدث AAB على سطح المكتب
-    $files = Get-ChildItem "$([Environment]::GetFolderPath('Desktop'))\SchoolApp-v*.aab" |
+    $files = Get-ChildItem "$([Environment]::GetFolderPath('Desktop'))\SchoolApp-v*.aab" -ErrorAction SilentlyContinue |
              Sort-Object LastWriteTime -Descending
-    $AabPath = $files[0].FullName
+    if ($files) { $AabPath = $files[0].FullName }
 }
 
 if ($AabPath -and (Test-Path $AabPath)) {
-    Write-Host ""
-    Write-Host "📦 فحص التوقيع على: $(Split-Path $AabPath -Leaf)" -ForegroundColor Cyan
-    Write-Host "───────────────────────────────────────────" -ForegroundColor Gray
-    & $jarsigner -verify $AabPath -verbose 2>&1 | Select-String "jar verified|FAILED|CN=|SHA"
+    Write-Host ''
+    Write-Host "=== Signing Check: $(Split-Path $AabPath -Leaf) ===" -ForegroundColor Cyan
+    & $jarsigner -verify $AabPath -verbose 2>&1 | Select-String 'jar verified|FAILED|CN='
 } else {
-    Write-Host "⚠️  لا يوجد AAB للفحص. مرّر المسار كـ argument." -ForegroundColor Yellow
+    Write-Host 'No AAB found. Pass path as argument: .\check-signing.ps1 path\to\file.aab' -ForegroundColor Yellow
 }
 
-Write-Host ""
+Write-Host ''

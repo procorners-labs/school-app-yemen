@@ -8,6 +8,8 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
+    alias(libs.plugins.google.gms.google.services)
+    alias(libs.plugins.google.firebase.crashlytics)
 }
 
 // Load signing credentials from keystore.properties (never committed to git)
@@ -91,6 +93,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.firebase.crashlytics)
 
     // ── UI ────────────────────────────────────────────────────────────────
     implementation(libs.material)
