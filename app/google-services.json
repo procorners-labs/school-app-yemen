@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "435743942347",
-    "project_id": "mkrh-181cd",
-    "storage_bucket": "mkrh-181cd.firebasestorage.app"
+    "project_number": "108410742569",
+    "project_id": "school-494822",
+    "storage_bucket": "school-494822.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:435743942347:android:38b88f1ce2ffd97ef21d4e",
+        "mobilesdk_app_id": "1:108410742569:android:cd60f6317dbb3f4714b938",
         "android_client_info": {
           "package_name": "com.proconrers.schoolappyemen"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "104064888089481176491",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyCH9ogM5NIFjtb0SH9GuujwSw1r-lCYoJY"
+          "current_key": "AIzaSyCFcZz-AmX0MBk-8V5h5SzvJk2qfyGQJ1w"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "104064888089481176491",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
