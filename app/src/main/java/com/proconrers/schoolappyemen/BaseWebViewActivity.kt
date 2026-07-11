@@ -182,9 +182,14 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(binding.webView, true)
 
-        // جسر JS: إعادة محاولة حقيقية + حفظ ملفات blob (تصدير Excel)
+        // جسر JS: إعادة محاولة حقيقية + حفظ ملفات blob (تصدير Excel) +
+        // تعطيل/تفعيل SwipeRefreshLayout الأصلي (يستدعيه الدرج الجانبي في منصة المعلم)
         binding.webView.addJavascriptInterface(
-            SchoolJsBridge(this, binding.webView) { lastFailedUrl ?: startUrl },
+            SchoolJsBridge(
+                this,
+                binding.webView,
+                { lastFailedUrl ?: startUrl }
+            ) { enabled -> binding.swipeRefresh.isEnabled = enabled },
             WebViewSupport.JS_BRIDGE
         )
 
@@ -224,6 +229,9 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         binding.webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 binding.progressBar.visibility = View.VISIBLE
+                // ضمانة: أي تنقّل صفحة جديد يعيد تفعيل PTR الأصلي — يمنع بقاءه معطَّلاً
+                // للأبد لو انقطع تنفيذ closeSidebar() في JS (خطأ/تنقّل مفاجئ والدرج مفتوح).
+                binding.swipeRefresh.isEnabled = true
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
