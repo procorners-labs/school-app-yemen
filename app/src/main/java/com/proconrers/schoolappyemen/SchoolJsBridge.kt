@@ -20,18 +20,29 @@ import java.io.FileOutputStream
  *     بدل location.reload الذي كان يعيد صفحة الخطأ نفسها).
  *   - saveBase64(): يحفظ ملفاً وُلِّد داخل المتصفح (blob: مثل تصدير Excel من
  *     SheetJS) إلى مجلد «التنزيلات» العام.
+ *   - setSwipeRefreshEnabled(): يعطّل/يفعّل SwipeRefreshLayout الأصلي — طبقة
+ *     منفصلة تماماً عن حارس سحب-التحديث في صفحة الويب، لا تعرف شيئاً عن حالة
+ *     الدرج الجانبي هناك. تستدعيها Teacher Dashboard.html عند فتح/إغلاق الدرج
+ *     كي لا يتعارض سحب اللمس داخل الدرج المفتوح مع تحديث WebView الأصلي.
  *
  * @param targetUrl دالة تُرجِع الرابط الذي يجب إعادة تحميله عند retry().
+ * @param setSwipeEnabled دالة تُبدِّل حالة SwipeRefreshLayout.isEnabled.
  */
 class SchoolJsBridge(
     private val activity: Activity,
     private val webView: WebView,
-    private val targetUrl: () -> String
+    private val targetUrl: () -> String,
+    private val setSwipeEnabled: (Boolean) -> Unit
 ) {
 
     @JavascriptInterface
     fun retry() {
         activity.runOnUiThread { webView.loadUrl(targetUrl()) }
+    }
+
+    @JavascriptInterface
+    fun setSwipeRefreshEnabled(enabled: Boolean) {
+        activity.runOnUiThread { setSwipeEnabled(enabled) }
     }
 
     @JavascriptInterface

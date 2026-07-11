@@ -145,7 +145,11 @@ class MainActivity : AppCompatActivity() {
         WebViewSupport.applyDefaults(webView)
 
         webView.addJavascriptInterface(
-            SchoolJsBridge(this, webView) { lastFailedUrl ?: mainUrl },
+            SchoolJsBridge(
+                this,
+                webView,
+                { lastFailedUrl ?: mainUrl }
+            ) { enabled -> swipeRefresh.isEnabled = enabled },
             WebViewSupport.JS_BRIDGE
         )
 
@@ -245,6 +249,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 progressBar.visibility = View.VISIBLE
+                swipeRefresh.isEnabled = true
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
