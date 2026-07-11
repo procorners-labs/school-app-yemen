@@ -71,6 +71,19 @@ https://school-teacher-proxy.procorners-shop.workers.dev/{home,teacher,student,c
 
 ---
 
+## تغييرات معلّقة بانتظار النشر (`main` محدَّث، Play Store ليس بعد)
+
+- **2026-07-11 — جسر تعطيل SwipeRefreshLayout الأصلي عند فتح الدرج الجانبي (منصة المعلم).** مدموج
+  في `main` (`SchoolJsBridge.kt`/`BaseWebViewActivity.kt`/`MainActivity.kt`)، `compileDebugKotlin`+
+  `assembleDebug` نجحا محلياً، الطرف المقابل في الويب (`school-app-yemen-gas`) **منشور حيّاً بالفعل**
+  (`teacher@552`) وآمن بلا أي أثر إنتاجي حتى تُثبَّت نسخة أندرويد جديدة. **لم يُرفَع Play Store بعد
+  بطلب صريح من المالك** (يريد إضافة تعديلات أخرى أولاً وينشر بنفسه لاحقاً). التفاصيل الكاملة + سبب
+  الخلل الجذري + قائمة اختبار يدوي كاملة قبل/بعد الرفع في
+  [`_docs/2026-07-11-swiperefresh-sidebar-bridge.md`](_docs/2026-07-11-swiperefresh-sidebar-bridge.md)
+  — راجعه أولاً قبل أي محاولة نشر لاحقة لهذا التغيير تحديداً.
+
+---
+
 ## قواعد
 
 - **Kotlin** للتطبيق نفسه (لا قيد ES5 هنا — ذاك خاصّ بكود GAS في `school-app-yemen-gas` فقط). قيد
@@ -80,4 +93,4 @@ https://school-teacher-proxy.procorners-shop.workers.dev/{home,teacher,student,c
 - قبل أي رفع فعلي عبر `deploy-to-play.ps1`: تأكيد حيّ من المالك (نفس منطق 🔴 النشر الحيّ في
   `SchoolApp-gas` — رفع إصدار على Play Store عملية يصعب التراجع عنها).
 
-آخر تحديث: 2026-07-09 (تحديث توثيق GCP/Analytics)
+آخر تحديث: 2026-07-11 (توثيق جسر SwipeRefreshLayout المعلّق بانتظار النشر)
