@@ -58,7 +58,9 @@ object WebViewSupport {
             loadWithOverviewMode = true
             useWideViewPort = true
             mediaPlaybackRequiresUserGesture = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            // COMPATIBLE (لا ALWAYS_ALLOW) — كل المحتوى الآن HTTPS من نفس الأصل بعد نطاق
+            // school.procorners.com؛ COMPATIBLE يسمح فقط بالحالات المتساهلة القديمة بدل فتح الباب كاملاً.
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             // LOAD_DEFAULT يحترم ترويسات HTTP للكاش.
             // كان LOAD_CACHE_ELSE_NETWORK يقدّم نسخاً قديمة منتهية الصلاحية حتى
             // مع وجود إنترنت → إصلاحات الويب المنشورة لم تكن تظهر داخل التطبيق
@@ -80,25 +82,43 @@ object WebViewSupport {
      */
     fun errorPageHtml(title: String, body: String, showRetry: Boolean): String {
         val retry = if (showRetry) {
-            "<button onclick=\"window.$JS_BRIDGE && window.$JS_BRIDGE.retry()\" " +
-                "style='padding:13px 34px;background:#0f3b5c;color:#fff;border:none;" +
-                "border-radius:26px;font-size:16px;margin-top:20px;font-weight:bold;'>" +
+            "<button class='retry-btn' onclick=\"window.$JS_BRIDGE && window.$JS_BRIDGE.retry()\">" +
                 "إعادة المحاولة</button>"
         } else ""
+        // ألوان الوضع الفاتح افتراضياً + تجاوز عبر prefers-color-scheme للوضع الليلي —
+        // يتبع ثيم النظام تلقائياً بلا أي منطق Kotlin إضافي (WebView يدعم media query هذه).
         return """
             <!doctype html>
             <html dir='rtl' lang='ar'>
             <head>
               <meta charset='utf-8'>
               <meta name='viewport' content='width=device-width, initial-scale=1'>
+              <style>
+                :root { color-scheme: light dark; }
+                body {
+                  margin:0; display:flex; flex-direction:column; align-items:center;
+                  justify-content:center; min-height:100vh; text-align:center;
+                  font-family:-apple-system,Segoe UI,Roboto,sans-serif;
+                  background:#f8fafc; color:#334155; padding:24px;
+                }
+                h2 { color:#e76f51; margin:6px 0; }
+                p { font-size:15px; line-height:1.7; color:#64748b; max-width:340px; }
+                .retry-btn {
+                  padding:13px 34px; background:#0f3b5c; color:#fff; border:none;
+                  border-radius:26px; font-size:16px; margin-top:20px; font-weight:bold;
+                }
+                @media (prefers-color-scheme: dark) {
+                  body { background:#0f172a; color:#cbd5e1; }
+                  h2 { color:#f4977a; }
+                  p { color:#8b97ac; }
+                  .retry-btn { background:#2c6488; }
+                }
+              </style>
             </head>
-            <body style='margin:0;display:flex;flex-direction:column;align-items:center;
-                         justify-content:center;min-height:100vh;text-align:center;
-                         font-family:-apple-system,Segoe UI,Roboto,sans-serif;
-                         background:#f8fafc;color:#334155;padding:24px;'>
+            <body>
               <div style='font-size:56px;margin-bottom:10px;'>⚠️</div>
-              <h2 style='color:#e76f51;margin:6px 0;'>$title</h2>
-              <p style='font-size:15px;line-height:1.7;color:#64748b;max-width:340px;'>$body</p>
+              <h2>$title</h2>
+              <p>$body</p>
               $retry
             </body>
             </html>

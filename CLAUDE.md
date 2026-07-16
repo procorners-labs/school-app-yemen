@@ -37,8 +37,11 @@
 
 `AppConfig.kt` يشير حالياً إلى روابط **Cloudflare Worker ثابتة** مكتوبة حرفياً في الكود:
 ```
-https://school-teacher-proxy.procorners-shop.workers.dev/{home,teacher,student,cms,schedule}/index.html
+https://school.procorners.com/{home,teacher,student,cms,schedule}/index.html
 ```
+(النطاق الأساسي منذ 2026-07-17 — نطاق مخصّص يتفادى حجب يمن نت لـ`workers.dev`؛ القديم
+`school-teacher-proxy.procorners-shop.workers.dev` لا يزال في `trustedSslDomains` كمسار احتياطي،
+لم يُحذف. التفاصيل الكاملة في `school-app-yemen-gas/_docs/2026-07-16-حجب-يمن-نت-workers-dev-ونطاق-مخصص.md`.)
 
 يوجد آلية مزامنة ديناميكية جاهزة تقرأ `action=deployments` من GAS (`syncIfNeeded()`)، لكنها **مُعطَّلة
 عمداً** حالياً — التعليق في الكود نفسه صريح:
@@ -81,6 +84,22 @@ https://school-teacher-proxy.procorners-shop.workers.dev/{home,teacher,student,c
   الخلل الجذري + قائمة اختبار يدوي كاملة قبل/بعد الرفع في
   [`_docs/2026-07-11-swiperefresh-sidebar-bridge.md`](_docs/2026-07-11-swiperefresh-sidebar-bridge.md)
   — راجعه أولاً قبل أي محاولة نشر لاحقة لهذا التغيير تحديداً.
+- **2026-07-17 — تحديث الروابط الافتراضية إلى `school.procorners.com` + سقالة Firebase Cloud
+  Messaging (FCM) وصوت التنبيهات + تحسينات Dark Mode/أمان.** راجع
+  `C:\Users\osama\.claude\plans\snug-wishing-balloon.md` للخطة الكاملة وحالة كل مرحلة.
+  **ما أُنجِز وبُني محلياً بنجاح (`compileDebugKotlin`):** `AppConfig.kt` (روابط + trustedSslDomains)،
+  `SchoolApplication.kt`/`SchoolFcmService.kt` جديدان (قناة إشعارات بصوت مخصّص `res/raw/notify_chime.wav`
+  + عرض إشعار)، Dark Mode لصفحة الخطأ (`WebViewSupport.errorPageHtml` عبر `prefers-color-scheme`) +
+  الثيم صار `Theme.AppCompat.DayNight.NoActionBar` مطبَّقاً فعلياً في المانيفست (كان يُطبَّق
+  `Theme.AppCompat.Light.NoActionBar` مباشرة بدل الثيم المخصّص — ثغرة سابقة)، `mixedContentMode`
+  شُدِّد من `ALWAYS_ALLOW` إلى `COMPATIBILITY_MODE`، `SchoolAppyemen.zip` القديم (7MB) أُزيل من git.
+  **مؤجَّل عمداً (خطر انحدار بلا جهاز حقيقي للتحقّق):** دمج `MainActivity` مع `BaseWebViewActivity`
+  (توسيع بدل تكرار) — تغيير معماري على شاشة الإقلاع (LAUNCHER) بلا إمكانية اختبار حيّ في هذه الجلسة؛
+  وتضييق `cleartextTrafficPermitted` (لا يزال `true` عاماً) — نفس السبب. كلاهما بحاجة جلسة قادمة مع
+  اختبار جهاز فعلي قبل التنفيذ.
+  **لا يُنشر Play Store قبل:** (أ) تدوير كلمة مرور الـkeystore الحقيقية (مكتوبة حالياً كنص صريح
+  `123456` في `check-signing.ps1`/`diagnose-signing.ps1`، يجب تدويرها أولاً)، (ب) اختبار FCM حيّ على
+  جهاز حقيقي، (ج) تنفيذ قائمة اختبار جسر PTR أعلاه.
 
 ---
 

@@ -9,7 +9,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"
 # ── إعدادات المشروع ──────────────────────────────────────────────────────────
 $PROJ     = "C:\Users\osama\AndroidStudioProjects\SchoolAppyemen"
 $WEB_DIR  = "C:\SchoolApp"
-$WORKER   = "https://school-teacher-proxy.procorners-shop.workers.dev"
+$WORKER   = "https://school.procorners.com"  # القديم: school-teacher-proxy.procorners-shop.workers.dev (محجوب على يمن نت، لا يزال يعمل كاحتياط)
 $GH_PAGES = "https://procorners-labs.github.io/school-app-yemen-web"
 $ANDROID_REPO = "procorners-labs/school-app-yemen"
 $WEB_REPO     = "procorners-labs/school-app-yemen-web"

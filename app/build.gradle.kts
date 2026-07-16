@@ -93,7 +93,11 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.splashscreen)
+
+    // ── Firebase (BoM أولاً كي تُدار كل الإصدارات معاً وتتجنّب تعارضاً لاحقاً) ──
+    implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.messaging)
 
     // ── UI ────────────────────────────────────────────────────────────────
     implementation(libs.material)

@@ -35,16 +35,19 @@ object AppConfig {
     private const val KEY_MASTER   = "url_master"
 
     // ─── الروابط الافتراضية (تُستخدم فقط في الإقلاع الأول قبل أول مزامنة) ──
+    // النطاق الأساسي: school.procorners.com (نطاق مخصّص يتفادى حجب workers.dev على يمن نت،
+    // راجع _docs/2026-07-16-حجب-يمن-نت-workers-dev-ونطاق-مخصص.md في مستودع school-app-yemen-gas).
+    // القديم workers.dev لا يزال مضافاً في trustedSslDomains أدناه كمسار احتياطي، بلا حذف.
     private const val DEFAULT_HOME =
-        "https://school-teacher-proxy.procorners-shop.workers.dev/home/index.html"
+        "https://school.procorners.com/home/index.html"
     private const val DEFAULT_CMS =
-        "https://school-teacher-proxy.procorners-shop.workers.dev/cms/index.html"
+        "https://school.procorners.com/cms/index.html"
     private const val DEFAULT_TEACHER =
-        "https://school-teacher-proxy.procorners-shop.workers.dev/teacher/index.html"
+        "https://school.procorners.com/teacher/index.html"
     private const val DEFAULT_STUDENT =
-        "https://school-teacher-proxy.procorners-shop.workers.dev/student/index.html"
+        "https://school.procorners.com/student/index.html"
     private const val DEFAULT_SCHEDULE =
-        "https://school-teacher-proxy.procorners-shop.workers.dev/schedule/index.html"
+        "https://school.procorners.com/schedule/index.html"
     private const val DEFAULT_MASTER =
         "https://script.google.com/macros/s/AKfycbx5H6uYXb-6iVt_nT4YkdnYMhl6eZJSDxsULsKa2eyblZQcwzRo4CXR3Mh_ecRSZd4M/exec"
 
@@ -112,6 +115,7 @@ object AppConfig {
 
     // ─── النطاقات الموثوقة (SSL) ──────────────────────────────────────────────
     val trustedSslDomains: List<String> = listOf(
+        "procorners.com",
         "workers.dev",
         "google.com",
         "script.google.com",
