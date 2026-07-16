@@ -11,6 +11,7 @@ $KEYTOOL   = "C:\Program Files\Android\Android Studio1\jbr\bin\keytool.exe"
 $JARSIGNER = "C:\Program Files\Android\Android Studio1\jbr\bin\jarsigner.exe"
 $PROJ      = "C:\Users\osama\AndroidStudioProjects\SchoolAppyemen"
 $PKG       = "com.proconrers.schoolappyemen"
+$kpFile    = "$PROJ\keystore.properties"
 
 function Title($t) { Write-Host "`n=== $t ===" -ForegroundColor Cyan }
 function OK($m)    { Write-Host "  [FOUND]    $m" -ForegroundColor Green }
@@ -81,12 +82,17 @@ if ($allKeystores.Count -eq 0) {
         Write-Host "  Created : $($ks.CreationTime.ToString('yyyy-MM-dd HH:mm'))"
         Write-Host "  Modified: $($ks.LastWriteTime.ToString('yyyy-MM-dd HH:mm'))"
 
-        # Try passwords
-        $passwords = @("123456","android","password","","1234","schoolapp")
-        foreach ($pw in $passwords) {
+        # اقرأ كلمة المرور من keystore.properties المشروع (لا تخمين لكلمات مرور ضعيفة شائعة —
+        # كانت هذه القائمة أمنياً حسّاسة إذ تطابق كلمة مرور keystore حقيقية فعلية).
+        $pw = $null
+        if (Test-Path $kpFile) {
+            $kpRaw = Get-Content $kpFile -Raw
+            if ($kpRaw -match 'storePassword\s*=\s*(.+)') { $pw = $Matches[1].Trim() }
+        }
+        if ($pw) {
             $r = & $KEYTOOL -list -v -keystore $ks.FullName -storepass $pw 2>&1 | Out-String
             if ($r -match "PrivateKeyEntry|Your keystore contains") {
-                Write-Host "  Password: $pw" -ForegroundColor Green
+                Write-Host "  Password: (from keystore.properties)" -ForegroundColor Green
                 # Extract alias
                 if ($r -match "Alias name: +(.+)") { Write-Host "  Alias   : $($Matches[1].Trim())" }
                 # Extract SHA256
@@ -109,7 +115,6 @@ if ($allKeystores.Count -eq 0) {
 # ════════════════════════════════════════════════════════════════════════════
 Title "3. Current keystore.properties Configuration"
 # ════════════════════════════════════════════════════════════════════════════
-$kpFile = "$PROJ\keystore.properties"
 if (Test-Path $kpFile) {
     $kp = Get-Content $kpFile
     OK "keystore.properties exists"
@@ -179,10 +184,16 @@ Title "6. Recommendation"
 # ════════════════════════════════════════════════════════════════════════════
 Write-Host ""
 
-# Check if schoolapp.jks exists (the original)
-$origKs = "C:\Users\osama\schoolapp.jks"
-if (Test-Path $origKs) {
-    $origR = & $KEYTOOL -list -v -keystore $origKs -storepass "123456" 2>&1 | Out-String
+# Check if the configured keystore exists (path/password from keystore.properties, not hardcoded)
+$origKs = $null
+$origPw = $null
+if (Test-Path $kpFile) {
+    $kpRaw2 = Get-Content $kpFile -Raw
+    if ($kpRaw2 -match 'storeFile\s*=\s*(.+)') { $origKs = $Matches[1].Trim().Replace('/', '\') }
+    if ($kpRaw2 -match 'storePassword\s*=\s*(.+)') { $origPw = $Matches[1].Trim() }
+}
+if ($origKs -and $origPw -and (Test-Path $origKs)) {
+    $origR = & $KEYTOOL -list -v -keystore $origKs -storepass $origPw 2>&1 | Out-String
     if ($origR -match "SHA256: +([A-F0-9:]+)") {
         $origFp = $Matches[1].Trim()
         Write-Host "  ORIGINAL keystore (schoolapp.jks) fingerprint:" -ForegroundColor White

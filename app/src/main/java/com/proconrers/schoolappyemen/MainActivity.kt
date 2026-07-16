@@ -4,15 +4,22 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
 import android.os.Message
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -103,6 +110,7 @@ class MainActivity : AppCompatActivity() {
 
         buildViews()
         setupWebView()
+        checkForUpdates()
         netController = NetworkReloadController(this) { onNetworkAvailable() }
         swipeRefresh.setColorSchemeColors(
             ContextCompat.getColor(this, R.color.progress_indicator_color)
@@ -153,6 +161,71 @@ class MainActivity : AppCompatActivity() {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 12)
         }
         binding.mainContainer.addView(progressBar)
+    }
+
+    /**
+     * يستبدل إشعار VPN الثابت السابق (كان يظهر في صفحات الويب لكل زائر بلا تمييز). يعرض بانراً
+     * أصلياً غير حاجب فقط لمن لديه فعلاً إصدار قديم — القيمة المرجعية تأتي من دالة GAS جديدة
+     * `checkAppVersion` (راجع UpdateChecker.kt).
+     */
+    private fun checkForUpdates() {
+        val checker = UpdateChecker(this)
+        checker.cachedPlayUrlIfOutdated()?.let { showUpdateBanner(it) }
+        checker.checkIfNeeded { playUrl -> showUpdateBanner(playUrl) }
+    }
+
+    private fun showUpdateBanner(playUrl: String) {
+        if (isFinishing || isDestroyed) return
+        if (binding.mainContainer.findViewWithTag<View>(UPDATE_BANNER_TAG) != null) return
+
+        val banner = LinearLayout(this).apply {
+            tag = UPDATE_BANNER_TAG
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(28, 20, 20, 20)
+            background = GradientDrawable().apply {
+                setColor(ContextCompat.getColor(this@MainActivity, R.color.brand_primary))
+                cornerRadius = 24f
+            }
+            elevation = 8f
+        }
+
+        val messageText = TextView(this).apply {
+            text = "تحديث جديد متاح — حدِّث التطبيق للاستفادة من آخر الإصلاحات"
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            layoutParams =
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val updateBtn = TextView(this).apply {
+            text = "تحديث"
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            textSize = 13f
+            setPadding(24, 0, 24, 0)
+            setOnClickListener { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(playUrl))) }
+        }
+
+        val closeBtn = TextView(this).apply {
+            text = "✕"
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            setPadding(16, 0, 8, 0)
+            setOnClickListener { binding.mainContainer.removeView(banner) }
+        }
+
+        banner.addView(messageText)
+        banner.addView(updateBtn)
+        banner.addView(closeBtn)
+
+        val params = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.BOTTOM
+            setMargins(24, 0, 24, 24)
+        }
+        binding.mainContainer.addView(banner, params)
     }
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
@@ -389,5 +462,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainWebView"
+        private const val UPDATE_BANNER_TAG = "update_banner"
     }
 }

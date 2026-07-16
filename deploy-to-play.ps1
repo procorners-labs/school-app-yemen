@@ -257,11 +257,11 @@ if ($bk -match 'versionName\s*=\s*"([\d\.]+)"') { $versionName = $Matches[1] }
 $releaseNotes = @(
     @{
         language = "ar"
-        text     = "v$versionName - تحديث يشمل: دعم Edge-to-Edge لاندرويد 15، حفظ الجلسة عند التحديث، تحسين زر الرجوع، دعم العمل دون اتصال، وإصلاحات عامة."
+        text     = "v$versionName - تحديث يشمل: نطاق أسرع وأكثر موثوقية (يتفادى مشاكل الاتصال مع بعض مزوّدي الخدمة)، إشعارات فورية للأخبار المهمة، دعم الوضع الليلي، وتحسينات أمان وأداء عامة."
     },
     @{
         language = "en-US"
-        text     = "v$versionName - Edge-to-Edge support for Android 15, session persistence on reload, improved back button, offline support, and bug fixes."
+        text     = "v$versionName - Faster, more reliable connectivity (bypasses issues with some local ISPs), instant push notifications for important news, dark mode support, and general security/performance improvements."
     }
 )
 

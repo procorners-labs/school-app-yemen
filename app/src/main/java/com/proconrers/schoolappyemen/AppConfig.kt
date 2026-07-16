@@ -38,16 +38,19 @@ object AppConfig {
     // النطاق الأساسي: school.procorners.com (نطاق مخصّص يتفادى حجب workers.dev على يمن نت،
     // راجع _docs/2026-07-16-حجب-يمن-نت-workers-dev-ونطاق-مخصص.md في مستودع school-app-yemen-gas).
     // القديم workers.dev لا يزال مضافاً في trustedSslDomains أدناه كمسار احتياطي، بلا حذف.
+    // ?school=<uuid>: معرّف مدارس الإبداع والتميز الدولية الفعلي في سجل Master_Admin_School —
+    // تحقّقتُ منه بقراءة حيّة للسجل (2026-07-17)، توضيح صريح بدل اعتماد ضمني على مدرسة افتراضية.
+    private const val EBDAA_SCHOOL_ID = "12725ed7-c139-422c-a2d1-ec0ddd358104"
     private const val DEFAULT_HOME =
-        "https://school.procorners.com/home/index.html"
+        "https://school.procorners.com/home/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_CMS =
-        "https://school.procorners.com/cms/index.html"
+        "https://school.procorners.com/cms/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_TEACHER =
-        "https://school.procorners.com/teacher/index.html"
+        "https://school.procorners.com/teacher/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_STUDENT =
-        "https://school.procorners.com/student/index.html"
+        "https://school.procorners.com/student/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_SCHEDULE =
-        "https://school.procorners.com/schedule/index.html"
+        "https://school.procorners.com/schedule/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_MASTER =
         "https://script.google.com/macros/s/AKfycbx5H6uYXb-6iVt_nT4YkdnYMhl6eZJSDxsULsKa2eyblZQcwzRo4CXR3Mh_ecRSZd4M/exec"
 
