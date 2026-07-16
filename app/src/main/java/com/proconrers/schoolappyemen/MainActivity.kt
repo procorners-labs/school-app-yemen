@@ -67,6 +67,20 @@ class MainActivity : AppCompatActivity() {
         fileUploadCallback = null
     }
 
+    // إشعارات: Android 13+ يتطلّب طلب صلاحية POST_NOTIFICATIONS صراحةً وقت التشغيل.
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* لا حاجة لأي إجراء إضافي — منح/رفض يُحترَم تلقائياً عند عرض أي إشعار لاحق */ }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) return
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -75,6 +89,7 @@ class MainActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         AppConfig.init(applicationContext)
+        requestNotificationPermissionIfNeeded()
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.mainContainer) { v, insets ->
             val bars = insets.getInsets(

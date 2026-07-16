@@ -28,9 +28,11 @@ lifecycleRuntimeKtx = "2.8.7"
 junit               = "4.13.2"
 androidxJunit       = "1.2.1"
 espressoCore        = "3.6.1"
-firebaseCrashlytics = "20.0.6"
 googleGmsGoogleServices = "4.5.0"
 googleFirebaseCrashlytics = "3.0.7"
+
+# ── Firebase (BoM يدير كل إصدارات مكتبات Firebase أدناه — لا نُثبِّت إصداراً فردياً) ──
+firebaseBom         = "33.7.0"
 
 # ═══════════════════════════════════════════════════════════════════════════
 [libraries]
@@ -54,7 +56,11 @@ androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle",         name = 
 junit                          = { group = "junit",                      name = "junit",                 version.ref = "junit"                }
 androidx-junit                 = { group = "androidx.test.ext",          name = "junit",                 version.ref = "androidxJunit"        }
 androidx-espresso-core         = { group = "androidx.test.espresso",     name = "espresso-core",         version.ref = "espressoCore"         }
-firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics", version.ref = "firebaseCrashlytics" }
+
+# ── Firebase (إصدارات كل مكتبة تُدار عبر firebase-bom — لا version.ref هنا عمداً) ──
+firebase-bom          = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-crashlytics  = { group = "com.google.firebase", name = "firebase-crashlytics-ktx" }
+firebase-messaging    = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
 
 # ═══════════════════════════════════════════════════════════════════════════
 [plugins]

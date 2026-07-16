@@ -14,7 +14,7 @@ $ErrorActionPreference   = "Continue"
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"
 $PROJ          = "C:\Users\osama\AndroidStudioProjects\SchoolAppyemen"
 $WEB_DIR       = "C:\SchoolApp"
-$WORKER_URL    = "https://school-teacher-proxy.procorners-shop.workers.dev"
+$WORKER_URL    = "https://school.procorners.com"  # القديم: school-teacher-proxy.procorners-shop.workers.dev (محجوب على يمن نت، لا يزال يعمل كاحتياط)
 $PLAY_CONSOLE  = "https://play.google.com/console"
 
 Set-Location $PROJ
