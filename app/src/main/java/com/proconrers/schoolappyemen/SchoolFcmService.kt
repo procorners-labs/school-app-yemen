@@ -51,6 +51,11 @@ class SchoolFcmService : FirebaseMessagingService() {
     }
 
     private fun showNotification(title: String, body: String) {
+        if (SchoolApplication.isAppInForeground) {
+            Log.d(TAG, "App in foreground — suppressing duplicate notification banner")
+            return
+        }
+
         val channelId = getString(R.string.fcm_default_channel_id)
 
         val intent = Intent(this, MainActivity::class.java).apply {

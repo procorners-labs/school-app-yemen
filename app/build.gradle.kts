@@ -25,11 +25,10 @@ android {
         applicationId = "com.proconrers.schoolappyemen"
         minSdk = 24
         targetSdk = 35
-        versionCode = 30
-        versionName = "2.7"
+        versionCode = 31
+        versionName = "2.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        multiDexEnabled = true
     }
 
     signingConfigs {
@@ -105,7 +104,6 @@ dependencies {
     implementation(libs.androidx.swiperefreshlayout)
 
     // ── Support ───────────────────────────────────────────────────────────
-    implementation(libs.androidx.multidex)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

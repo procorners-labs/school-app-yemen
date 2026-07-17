@@ -27,12 +27,14 @@
 -keep class com.proconrers.schoolappyemen.databinding.** { *; }
 
 # 4. قواعد عامة لأندرويد
+# ملاحظة: أُزيل الـ-keep الشامل لـMaterial وKotlin (2026-07-17) — القواعد المُستهلَكة
+# (consumer-rules) المرفقة مع كل AAR + آلية keep التلقائية لعناصر XML كافية فعلياً؛
+# الـkeep الشامل كان يُبطل فائدة isMinifyEnabled بلا داعٍ حقيقي (لا استخدام انعكاس/reflection
+# مباشر لهذه المكتبات في الكود).
 -dontwarn com.google.android.material.**
--keep class com.google.android.material.** { *; }
 
 # 5. قواعد خاصة بـ Kotlin (لمنع الأخطاء بعد التصغير)
 -dontwarn kotlin.**
--keep class kotlin.** { *; }
 -keepclassmembernames class kotlin.jvm.internal.Intrinsics {
     public static void checkFieldIsNotNull(java.lang.Object, java.lang.String);
 }
