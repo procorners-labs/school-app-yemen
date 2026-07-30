@@ -35,7 +35,14 @@
 
 ## حقيقة تشغيلية جوهرية — المزامنة الديناميكية معطَّلة عمداً
 
-`AppConfig.kt` يشير حالياً إلى روابط **Cloudflare Worker ثابتة** مكتوبة حرفياً في الكود:
+> **تحديث 2026-07-30 (فرع `claude/practical-planck-xvluud`، غير منشور بعد):** `AppConfig.kt` صار
+> يبني الروابط من **قائمة نطاقات مرتَّبة** (`yemenschoolz.com` أساسي ← `school.procorners.com` ←
+> `workers.dev`) مع **تجاوز فشل تلقائي** يحفظ النطاق الناجح، لا من ثوابت نطاق واحد. المزامنة تبقى
+> معطَّلة — وتفعيلها كما توصي وثيقة 2026-07-26 **انحدار حقيقي** لأن `isValidUrl` تقبل روابط
+> `script.google.com/.../exec` المحجوبة على يمن نت فقط. التفاصيل:
+> [`_docs/2026-07-30-api36-بصمة-اشعارات-نطاق-yemenschoolz.md`](_docs/2026-07-30-api36-بصمة-اشعارات-نطاق-yemenschoolz.md).
+
+`AppConfig.kt` كان يشير إلى روابط **Cloudflare Worker ثابتة** مكتوبة حرفياً في الكود:
 ```
 https://school.procorners.com/{home,teacher,student,cms,schedule}/index.html
 ```
@@ -75,6 +82,19 @@ https://school.procorners.com/{home,teacher,student,cms,schedule}/index.html
 ---
 
 ## تغييرات معلّقة بانتظار النشر (`main` محدَّث، Play Store ليس بعد)
+
+- **2026-07-30 — استهداف Android 16 (API 36) + قفل بصمة + إشعارات/صوت + نطاق `yemenschoolz.com`
+  بتجاوز فشل + دعوة تحديث في التطبيق والويب.** `versionCode 32`/`versionName 2.9`
+  (**كان 31/2.8 حين كُتب الفرع؛ رُفِع بعد مصالحة PR#14 التي أثبتت أن 31 منشور فعلاً** —
+  Play يرفض إعادة استخدامه).
+  **⛔ لم يُبنَ محلياً** (جلسة سحابية بلا SDK أندرويد) — أول خطوة لأي جلسة تالية:
+  `.\gradlew assembleDebug`. ملفات جديدة: `BiometricLock.kt` · `NotificationHelper.kt` ·
+  `UpdateBanner.kt`. الطرف المقابل في الويب بفرع `claude/sweet-allen-xvluud`
+  (`school-app-yemen-gas`) وآمن قبل نشر التطبيق. **الحاجز الحيّ المقيس:**
+  `checkAppVersion` تُرجِع `latestVersionCode: 0` ⇒ بانر التحديث لا يظهر لأحد حتى تُضبَط
+  Script Properties يدوياً. النطاق الكامل + قرارات التصميم + قائمة الاختبار اليدوي في
+  [`_docs/2026-07-30-api36-بصمة-اشعارات-نطاق-yemenschoolz.md`](_docs/2026-07-30-api36-بصمة-اشعارات-نطاق-yemenschoolz.md)
+  — راجعه أولاً قبل أي محاولة نشر.
 
 - **2026-07-11 — جسر تعطيل SwipeRefreshLayout الأصلي عند فتح الدرج الجانبي (منصة المعلم).** مدموج
   في `main` (`SchoolJsBridge.kt`/`BaseWebViewActivity.kt`/`MainActivity.kt`)، `compileDebugKotlin`+

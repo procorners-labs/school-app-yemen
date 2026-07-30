@@ -6,4 +6,11 @@
     <string name="fcm_default_channel_id">school_notifications</string>
     <string name="fcm_default_channel_name">إشعارات المدرسة</string>
     <string name="fcm_default_channel_desc">إشعارات الأخبار والتنبيهات من مدارس الإبداع والتميز الدولية</string>
+
+    <!-- شاشة قفل البصمة (res/layout/activity_webview.xml + BaseWebViewActivity) -->
+    <string name="lock_icon" translatable="false">🔒</string>
+    <string name="lock_title">المحتوى محمي</string>
+    <string name="lock_message">قفل البصمة مُفعَّل على هذا الجهاز. أكِّد هويتك لعرض المنصّة — بياناتك وجلستك كما هي.</string>
+    <string name="lock_unlock">فتح بالبصمة</string>
+    <string name="lock_back">رجوع للصفحة الرئيسية</string>
 </resources>

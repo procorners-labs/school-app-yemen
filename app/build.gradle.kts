@@ -19,20 +19,22 @@ if (keystoreFile.exists()) keystoreProps.load(keystoreFile.inputStream())
 
 android {
     namespace = "com.proconrers.schoolappyemen"
-    compileSdk = 37
+    // compileSdk 36 = Android 16، مدعوم رسمياً في AGP 8.13 ⇒ لم نَعُد نحتاج
+    // android.suppressUnsupportedCompileSdk (أُزيل من gradle.properties في نفس الدفعة).
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.proconrers.schoolappyemen"
         minSdk = 24
-        targetSdk = 35
-        // 🔴 المنشور على Play: versionCode 31 / versionName "2.8" (نُشر 2026-07-17 07:40).
-        // صُولِح هنا 2026-08-11: كان المستودع على 30/"2.7" — أي أن vc31 بُني ونُشر دون أن
-        // يُسجَّل رفع الرقم في git، فمن يقرأ هذا السطر يستنتج المنشور خطأً بإصدار واحد.
-        // الحزم محفوظة في Workspace\Releases\SchoolAppyemen\ (فيه README يحدّد الحيّة).
-        // ⇒ أي إصدار قادم يبدأ من 32 فأعلى؛ Play يرفض إعادة استخدام 31 ولو لم يعرفه
-        //   المستودع، وخطؤه («رمز الإصدار مستخدَم») يبدو غامضاً بلا هذا التعليق.
-        versionCode = 31
-        versionName = "2.8"
+        // targetSdk 36 (Android 16) — شرط Google Play الإلزامي: أي تحديث بعد 2026-08-31 يجب أن
+        // يستهدف مستوى واجهة صدر خلال عام من أحدث إصدار Android، وأعلى مستوى غير متوافق حالياً 35.
+        targetSdk = 36
+        // 🔴 المنشور على Play: versionCode 31 / versionName "2.8" (نُشر 2026-07-17 07:40) —
+        // صُولِح في main بـPR#14. **فلا يجوز لهذا الفرع استخدام 31**: Play يرفض إعادة استخدام
+        // رقم منشور برسالة «رمز الإصدار مستخدَم». هذا الفرع كان على 31 حين كُتب (2026-07-30،
+        // قبل المصالحة) فرُفِع إلى 32 عند إعادة تأسيسه على main.
+        versionCode = 32
+        versionName = "2.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
@@ -112,6 +114,8 @@ dependencies {
 
     // ── Support ───────────────────────────────────────────────────────────
     implementation(libs.androidx.multidex)
+    // قفل البصمة عند الدخول (BiometricLock.kt) — يجرّ androidx.fragment المطلوب لـBiometricPrompt
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

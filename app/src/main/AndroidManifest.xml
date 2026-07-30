@@ -15,6 +15,18 @@
     <!-- إشعارات Firebase Cloud Messaging (Android 13+ يتطلّب صلاحية صريحة وقت التشغيل) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- قفل الدخول بالبصمة (BiometricLock.kt) — USE_FINGERPRINT للأجهزة قبل أندرويد 9 فقط -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT"
+        android:maxSdkVersion="28" />
+    <!-- اهتزاز مصاحب لصوت التنبيه المخصّص (قناة الإشعارات + NotificationHelper) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- عتاد البصمة غير إلزامي: التطبيق يعمل كاملاً بلا قفل بصمة (القفل اختياري بيد المستخدم) -->
+    <uses-feature
+        android:name="android.hardware.fingerprint"
+        android:required="false" />
+
     <application
         android:name=".SchoolApplication"
         android:allowBackup="true"
@@ -28,7 +40,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SchoolAppYemen"
         android:enableOnBackInvokedCallback="true"
-        tools:targetApi="35">
+        tools:targetApi="36">
 
         <!--
             SplashActivity — نقطة الدخول الرئيسية (LAUNCHER).

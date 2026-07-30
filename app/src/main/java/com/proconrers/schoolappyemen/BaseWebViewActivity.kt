@@ -43,9 +43,27 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
     private var lastLoggedInUrl: String? = null
     private var showingError = false
     private lateinit var netController: NetworkReloadController
+    private lateinit var jsBridge: SchoolJsBridge
+
+    /** حارس تجاوز فشل النطاق: محاولة واحدة لكل صفحة ناجحة (يُصفَّر في onPageFinished). */
+    private var failoverAttempted = false
+
+    /** يمنع إطلاق حوار البصمة مرّتين متتاليتين (النظام قد يُطلق onPause/onResume أثناء عرضه). */
+    private var biometricPromptInFlight = false
 
     /** الرابط الأولي الذي يُحمَّل عند فتح الشاشة. */
     protected abstract val startUrl: String
+
+    /**
+     * الرابط الفعلي: يسمح لإشعار (FCM) بفتح صفحة بعينها عبر [NotificationHelper.EXTRA_START_URL]
+     * — **بشرط** أن يكون على أحد نطاقات المنصّة. بلا هذا الشرط تستطيع حمولة إشعار تحميل صفحة
+     * عشوائية داخل WebView يحمل جلسة مُصادَقة (وكوكيز، وجسر AndroidApp).
+     */
+    protected val effectiveStartUrl: String
+        get() {
+            val extra = intent?.getStringExtra(NotificationHelper.EXTRA_START_URL)
+            return if (!extra.isNullOrBlank() && AppConfig.isPlatformUrl(extra)) extra else startUrl
+        }
 
     /** وسم السجل (Logcat). */
     protected abstract val logTag: String
@@ -103,15 +121,18 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
             val target = binding.webView.url
                 ?.takeIf { it.startsWith("http") }
                 ?: lastLoggedInUrl
-                ?: startUrl
+                ?: effectiveStartUrl
             loadTarget(target)
         }
 
+        setupBiometricLock()
+        checkForUpdates()
+
         // فحص مسبق للاتصال: إن لا إنترنت، أظهِر صفحة الخطأ فوراً بدل تحميل فاشل
         if (WebViewSupport.isOnline(this)) {
-            loadTarget(startUrl)
+            loadTarget(effectiveStartUrl)
         } else {
-            lastFailedUrl = startUrl
+            lastFailedUrl = effectiveStartUrl
             showError(sslError = false)
         }
 
@@ -142,6 +163,52 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         })
     }
 
+    // ─── قفل البصمة ───────────────────────────────────────────────────────────
+
+    /**
+     * يُظهِر شاشة القفل ويطلب البصمة **مرّة واحدة** تلقائياً عند الفتح. القفل يعمل فقط إن فعّله
+     * المستخدم صراحةً (راجع [BiometricLock]) — بلا ذلك لا يظهر شيء إطلاقاً.
+     */
+    private fun setupBiometricLock() {
+        binding.btnUnlock.setOnClickListener { promptUnlock() }
+        binding.btnLockBack.setOnClickListener { navigateToMain() }
+
+        if (!BiometricLock.needsAuth(this)) {
+            binding.lockOverlay.visibility = View.GONE
+            return
+        }
+        binding.lockOverlay.visibility = View.VISIBLE
+        promptUnlock()
+    }
+
+    private fun promptUnlock() {
+        if (biometricPromptInFlight) return
+        biometricPromptInFlight = true
+        BiometricLock.authenticate(this) { ok ->
+            biometricPromptInFlight = false
+            if (ok) binding.lockOverlay.visibility = View.GONE
+            // فشل/إلغاء: الشاشة تبقى — المستخدم يعيد المحاولة بالزرّ أو يرجع للرئيسية.
+        }
+    }
+
+    // ─── دعوة التحديث ─────────────────────────────────────────────────────────
+
+    /**
+     * بطاقة «تحديث متاح» — تظهر لمن لديه إصدار أقدم فعلاً فقط، وتختفي من تلقاء نفسها بعد
+     * التحديث (المقارنة بـ`versionCode` الحقيقي للحزمة المثبَّتة، لا بعلمٍ مخزَّن).
+     */
+    private fun checkForUpdates() {
+        val checker = UpdateChecker(this)
+        checker.cachedPlayUrlIfOutdated()?.let { url ->
+            if (checker.cachedUpdateIsMandatory()) UpdateBanner.showBlocking(this, url)
+            else UpdateBanner.show(this, binding.bannerHost, url)
+        }
+        checker.checkIfNeeded { url, mandatory ->
+            if (mandatory) UpdateBanner.showBlocking(this, url)
+            else UpdateBanner.show(this, binding.bannerHost, url)
+        }
+    }
+
     /**
      * الانتقال الصريح إلى MainActivity بدل مجرد finish() —
      * يضمن العودة للصفحة الرئيسية حتى لو لم تكن في back stack.
@@ -168,6 +235,8 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
                     null
                 )
                 binding.webView.clearHistory()
+                // خروج واعٍ ⇒ أبطِل مهلة سماح البصمة كي يُطلَب القفل عند الدخول التالي
+                BiometricLock.invalidate()
                 // إصلاح: العودة للصفحة الرئيسية بدل إغلاق التطبيق
                 navigateToMain()
             }
@@ -184,14 +253,12 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
 
         // جسر JS: إعادة محاولة حقيقية + حفظ ملفات blob (تصدير Excel) +
         // تعطيل/تفعيل SwipeRefreshLayout الأصلي (يستدعيه الدرج الجانبي في منصة المعلم)
-        binding.webView.addJavascriptInterface(
-            SchoolJsBridge(
-                this,
-                binding.webView,
-                { lastFailedUrl ?: startUrl }
-            ) { enabled -> binding.swipeRefresh.isEnabled = enabled },
-            WebViewSupport.JS_BRIDGE
-        )
+        jsBridge = SchoolJsBridge(
+            this,
+            binding.webView,
+            { lastFailedUrl ?: effectiveStartUrl }
+        ) { enabled -> binding.swipeRefresh.isEnabled = enabled }
+        binding.webView.addJavascriptInterface(jsBridge, WebViewSupport.JS_BRIDGE)
 
         // تنزيل الملفات (http عبر DownloadManager، blob عبر الجسر)
         WebViewSupport.installDownloadHandler(binding.webView, this)
@@ -232,6 +299,9 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
                 // ضمانة: أي تنقّل صفحة جديد يعيد تفعيل PTR الأصلي — يمنع بقاءه معطَّلاً
                 // للأبد لو انقطع تنفيذ closeSidebar() في JS (خطأ/تنقّل مفاجئ والدرج مفتوح).
                 binding.swipeRefresh.isEnabled = true
+                // حارس سياق الجسر: يُضبَط هنا (الخيط الرئيسي) لأن قراءة webView.url من خيط
+                // الجسر غير آمنة — WebView ليس thread-safe.
+                jsBridge.setPageTrusted(url != null && AppConfig.isTrustedSslDomain(url))
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -239,8 +309,11 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
                 binding.swipeRefresh.isRefreshing = false
                 if (url != null && url.startsWith("http")) {
                     showingError = false
+                    failoverAttempted = false
+                    // النطاق الذي نجح فعلاً يصبح النطاق النشِط للإقلاعات التالية
+                    AppConfig.noteSuccessfulUrl(url)
                     // حفظ آخر URL حقيقي (ليس loginScreen) لاستخدامه عند التحديث
-                    if (!url.contains("loginScreen") && url != startUrl) {
+                    if (!url.contains("loginScreen") && url != effectiveStartUrl) {
                         lastLoggedInUrl = url
                     }
                 }
@@ -266,7 +339,7 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
                 } else {
                     handler?.cancel()
                     Log.e(logTag, "SSL REJECTED: $failing")
-                    lastFailedUrl = failing.ifBlank { startUrl }
+                    lastFailedUrl = failing.ifBlank { effectiveStartUrl }
                     stopIndicators()
                     showError(sslError = true)
                 }
@@ -288,7 +361,21 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
                 // تجاهل أخطاء الموارد الفرعية (صور/أيقونات) — لا نُخفي الصفحة كاملةً
                 if (request?.isForMainFrame != true) return
                 Log.e(logTag, "Error ${error?.errorCode}: ${error?.description}")
-                lastFailedUrl = request.url?.toString() ?: startUrl
+                val failed = request.url?.toString() ?: effectiveStartUrl
+                lastFailedUrl = failed
+
+                // تجاوز فشل النطاق: النطاقات الثلاثة على نفس الـWorker ⇒ نفس الاستجابة.
+                // إن حُجب النطاق الحالي (سابقة workers.dev على «يمن نت») نُجرّب التالي فوراً
+                // بدل إظهار «لا إنترنت» لمستخدم إنترنته يعمل.
+                val next = if (!failoverAttempted) AppConfig.nextHostUrl(failed) else null
+                if (next != null) {
+                    failoverAttempted = true
+                    Log.w(logTag, "Host failover → $next")
+                    stopIndicators()
+                    loadTarget(next)
+                    return
+                }
+
                 stopIndicators()
                 showError(sslError = false)
             }
@@ -319,7 +406,7 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
             android.widget.Toast.makeText(
                 this, "تمت استعادة الاتصال — جارٍ إعادة التحميل", android.widget.Toast.LENGTH_SHORT
             ).show()
-            loadTarget(lastFailedUrl ?: startUrl)
+            loadTarget(lastFailedUrl ?: effectiveStartUrl)
         }
     }
 
@@ -356,6 +443,11 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         super.onResume()
         binding.webView.onResume()
         netController.start()
+        // عودة بعد غياب طويل ⇒ أعِد إظهار شاشة القفل (بلا إطلاق الحوار تلقائياً هنا: النظام قد
+        // يُطلق onPause/onResume أثناء عرض حوار البصمة نفسه ⇒ حلقة لا نهائية).
+        if (BiometricLock.needsAuth(this)) {
+            binding.lockOverlay.visibility = View.VISIBLE
+        }
     }
 
     override fun onPause() {

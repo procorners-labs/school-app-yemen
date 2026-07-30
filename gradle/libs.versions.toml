@@ -20,6 +20,7 @@ swiperefreshlayout  = "1.1.0"
 
 # ── Support ────────────────────────────────────────────────────────────────
 multidex            = "2.0.1"
+biometric           = "1.1.0"
 webkit              = "1.12.1"
 activityKtx         = "1.9.3"
 lifecycleRuntimeKtx = "2.8.7"
@@ -48,6 +49,8 @@ androidx-swiperefreshlayout    = { group = "androidx.swiperefreshlayout", name =
 
 # ── Support ────────────────────────────────────────────────────────────────
 androidx-multidex              = { group = "androidx.multidex",          name = "multidex",              version.ref = "multidex"             }
+# 1.1.0 المستقرّة عمداً (لا 1.2.0-alpha): قفل الدخول ميزة أمان لا مكان فيها لواجهة برمجية alpha.
+androidx-biometric             = { group = "androidx.biometric",         name = "biometric",             version.ref = "biometric"            }
 androidx-webkit                = { group = "androidx.webkit",            name = "webkit",                version.ref = "webkit"               }
 androidx-activity-ktx          = { group = "androidx.activity",          name = "activity-ktx",          version.ref = "activityKtx"          }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle",         name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx"  }

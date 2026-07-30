@@ -30,11 +30,20 @@ object WebViewSupport {
     private const val TAG = "WebViewSupport"
 
     /**
-     * User-Agent موحّد. العلامتان "wv" و "SchoolAppYemen" تُستخدمان من JavaScript
-     * للكشف عن أننا داخل تطبيق WebView (إلغاء target=_blank، سلوك ديناميكي…).
+     * User-Agent موحّد. العلامتان "wv" و "SchoolAppYemen" تُستخدمان من JavaScript للكشف عن أننا
+     * داخل تطبيق WebView (إلغاء target=_blank، سلوك ديناميكي…) — بقيتا حرفياً كما هما كي لا
+     * ينكسر أي كشف قائم (`indexOf('SchoolAppYemen')` في `_DeploymentClient.html` وخمسة مواضع أخرى).
+     *
+     * **الجديد (2026-07-30): `SchoolAppBuild/<versionCode>` حقيقي بدل `SchoolAppYemen/1.0` الثابت.**
+     * كان الإصدار مكتوباً `1.0` حرفياً فتعذّر على الويب معرفة إصدار التطبيق إطلاقاً. الآن يقرؤه
+     * `assets/app-nudge.js` (مستودع gas) فيعرض دعوة التحديث لمن لديه إصدار أقدم فقط —
+     * **وتختفي من تلقاء نفسها** بعد التحديث لأن الـUA نفسه يحمل الرقم الجديد (بلا أي نداء خادم،
+     * وبلا حالة تُخزَّن في المتصفّح تحتاج تنظيفاً).
+     * غياب `SchoolAppBuild/` مع وجود `SchoolAppYemen` ⇒ إصدار قديم منشور (قبل ٣١) بالتعريف.
      */
-    const val USER_AGENT =
-        "Mozilla/5.0 (Linux; Android 13; wv; SchoolAppYemen/1.0) " +
+    val USER_AGENT: String =
+        "Mozilla/5.0 (Linux; Android 13; wv; SchoolAppYemen/${BuildConfig.VERSION_NAME}; " +
+        "SchoolAppBuild/${BuildConfig.VERSION_CODE}) " +
         "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 " +
         "Chrome/119.0.0.0 Mobile Safari/537.36"
 

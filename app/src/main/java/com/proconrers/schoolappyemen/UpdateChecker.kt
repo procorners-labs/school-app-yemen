@@ -26,9 +26,16 @@ class UpdateChecker(private val context: Context) {
         private const val KEY_LAST_CHECK = "last_check_ts"
         private const val KEY_PLAY_URL = "cached_play_url"
         private const val KEY_UPDATE_AVAILABLE = "cached_update_available"
+        private const val KEY_MANDATORY = "cached_update_mandatory"
         private const val CHECK_INTERVAL_MS = 12L * 60L * 60L * 1000L
-        private const val CHECK_URL = "https://school.procorners.com/gas/teacher"
     }
+
+    /**
+     * نقطة الفحص تُبنى من **النطاق النشِط** ([AppConfig.activeHost]) لا من نطاق مكتوب حرفياً:
+     * كانت مثبَّتة على `school.procorners.com`، فلو حُجب ذلك النطاق (سابقة حقيقية مع
+     * `workers.dev` — بند 20) لتوقّف فحص التحديث صامتاً بينما بقية التطبيق يعمل على نطاق آخر.
+     */
+    private val checkUrl: String get() = "${AppConfig.activeHost}/gas/teacher"
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -40,11 +47,16 @@ class UpdateChecker(private val context: Context) {
         return if (available && !url.isNullOrBlank()) url else null
     }
 
+    /** هل آخر فحص قال إن هذه النسخة **دون الحدّ الأدنى المدعوم** (تحديث إلزامي)؟ */
+    fun cachedUpdateIsMandatory(): Boolean = prefs.getBoolean(KEY_MANDATORY, false)
+
     /**
-     * يفحص في الخلفية إن مرّ أكثر من 12 ساعة منذ آخر فحص. onUpdateAvailable يُستدعى على الخيط
-     * الرئيسي فقط إن كان هناك فعلاً إصدار أحدث متاح.
+     * يفحص في الخلفية إن مرّ أكثر من 12 ساعة منذ آخر فحص. [onUpdateAvailable] يُستدعى على الخيط
+     * الرئيسي فقط إن كان هناك فعلاً إصدار أحدث متاح؛ `mandatory=true` يعني أن الإصدار المثبَّت
+     * دون `minSupportedVersionCode` الذي يُرجِعه الخادم (حقل اختياري — غيابه يعني «غير إلزامي»
+     * دائماً، فالتوافق مع النسخة المنشورة الحالية من `checkAppVersion` مضمون).
      */
-    fun checkIfNeeded(onUpdateAvailable: (playUrl: String) -> Unit) {
+    fun checkIfNeeded(onUpdateAvailable: (playUrl: String, mandatory: Boolean) -> Unit) {
         val last = prefs.getLong(KEY_LAST_CHECK, 0L)
         val now = System.currentTimeMillis()
         if ((now - last) < CHECK_INTERVAL_MS) return
@@ -52,7 +64,7 @@ class UpdateChecker(private val context: Context) {
         thread(start = true, isDaemon = true, name = "UpdateChecker") {
             try {
                 val body = """{"fn":"checkAppVersion","args":["${context.packageName}"]}"""
-                val conn = (URL(CHECK_URL).openConnection() as HttpURLConnection).apply {
+                val conn = (URL(checkUrl).openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
@@ -67,18 +79,22 @@ class UpdateChecker(private val context: Context) {
                     if (outer.optBoolean("ok", false)) {
                         val result = outer.optJSONObject("result")
                         val latestCode = result?.optInt("latestVersionCode", 0) ?: 0
+                        val minSupported = result?.optInt("minSupportedVersionCode", 0) ?: 0
                         val playUrl = result?.optString("playUrl", "") ?: ""
                         val currentCode = currentVersionCode()
                         val isOutdated = latestCode > 0 && currentCode > 0 && latestCode > currentCode
+                        val mandatory =
+                            isOutdated && minSupported > 0 && currentCode < minSupported
 
                         prefs.edit()
                             .putLong(KEY_LAST_CHECK, now)
                             .putBoolean(KEY_UPDATE_AVAILABLE, isOutdated)
+                            .putBoolean(KEY_MANDATORY, mandatory)
                             .putString(KEY_PLAY_URL, playUrl)
                             .apply()
 
                         if (isOutdated && playUrl.isNotBlank() && context is android.app.Activity) {
-                            context.runOnUiThread { onUpdateAvailable(playUrl) }
+                            context.runOnUiThread { onUpdateAvailable(playUrl, mandatory) }
                         }
                     }
                 }

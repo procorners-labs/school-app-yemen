@@ -4,9 +4,6 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
@@ -17,9 +14,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -48,13 +43,25 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
     private lateinit var swipeRefresh: SwipeRefreshLayout
+    private lateinit var bannerHost: FrameLayout
+    private lateinit var jsBridge: SchoolJsBridge
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private var lastFailedUrl: String? = null
     private var showingError = false
     private var pendingClearHistory = false
+    private var failoverAttempted = false
     private lateinit var netController: NetworkReloadController
 
-    private val mainUrl: String get() = AppConfig.HOME_URL
+    /**
+     * الرابط الأولي: يسمح لإشعار بفتح صفحة بعينها ([NotificationHelper.EXTRA_START_URL])
+     * بشرط أن تكون على أحد نطاقات المنصّة — وإلا الرئيسية.
+     */
+    private val mainUrl: String
+        get() {
+            val extra = intent?.getStringExtra(NotificationHelper.EXTRA_START_URL)
+            return if (!extra.isNullOrBlank() && AppConfig.isPlatformUrl(extra)) extra
+            else AppConfig.HOME_URL
+        }
 
     private val fileChooserLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -161,85 +168,46 @@ class MainActivity : AppCompatActivity() {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 12)
         }
         binding.mainContainer.addView(progressBar)
+
+        // مضيف بطاقة التحديث — يُضاف **أخيراً** كي يُرسَم فوق الـWebView (FrameLayout يرسم
+        // بترتيب الإضافة)، ويوحّد نفس دالّة العرض المستخدَمة في منصّتَي المعلّم/الطالب.
+        bannerHost = FrameLayout(this)
+        binding.mainContainer.addView(
+            bannerHost,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { gravity = Gravity.BOTTOM }
+        )
     }
 
     /**
-     * يستبدل إشعار VPN الثابت السابق (كان يظهر في صفحات الويب لكل زائر بلا تمييز). يعرض بانراً
-     * أصلياً غير حاجب فقط لمن لديه فعلاً إصدار قديم — القيمة المرجعية تأتي من دالة GAS جديدة
-     * `checkAppVersion` (راجع UpdateChecker.kt).
+     * يستبدل إشعار VPN الثابت السابق (كان يظهر في صفحات الويب لكل زائر بلا تمييز). يعرض بطاقة
+     * أصلية غير حاجبة فقط لمن لديه فعلاً إصدار قديم — القيمة المرجعية من دالة GAS
+     * `checkAppVersion` (راجع UpdateChecker.kt)، والبطاقة نفسها في [UpdateBanner] (مشتركة الآن
+     * مع منصّتَي المعلّم والطالب بدل أن تبقى حصراً على الرئيسية).
      */
     private fun checkForUpdates() {
         val checker = UpdateChecker(this)
-        checker.cachedPlayUrlIfOutdated()?.let { showUpdateBanner(it) }
-        checker.checkIfNeeded { playUrl -> showUpdateBanner(playUrl) }
-    }
-
-    private fun showUpdateBanner(playUrl: String) {
-        if (isFinishing || isDestroyed) return
-        if (binding.mainContainer.findViewWithTag<View>(UPDATE_BANNER_TAG) != null) return
-
-        val banner = LinearLayout(this).apply {
-            tag = UPDATE_BANNER_TAG
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(28, 20, 20, 20)
-            background = GradientDrawable().apply {
-                setColor(ContextCompat.getColor(this@MainActivity, R.color.brand_primary))
-                cornerRadius = 24f
-            }
-            elevation = 8f
+        checker.cachedPlayUrlIfOutdated()?.let { url ->
+            if (checker.cachedUpdateIsMandatory()) UpdateBanner.showBlocking(this, url)
+            else UpdateBanner.show(this, bannerHost, url)
         }
-
-        val messageText = TextView(this).apply {
-            text = "تحديث جديد متاح — حدِّث التطبيق للاستفادة من آخر الإصلاحات"
-            setTextColor(Color.WHITE)
-            textSize = 13f
-            layoutParams =
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        checker.checkIfNeeded { url, mandatory ->
+            if (mandatory) UpdateBanner.showBlocking(this, url)
+            else UpdateBanner.show(this, bannerHost, url)
         }
-
-        val updateBtn = TextView(this).apply {
-            text = "تحديث"
-            setTextColor(Color.WHITE)
-            setTypeface(typeface, Typeface.BOLD)
-            textSize = 13f
-            setPadding(24, 0, 24, 0)
-            setOnClickListener { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(playUrl))) }
-        }
-
-        val closeBtn = TextView(this).apply {
-            text = "✕"
-            setTextColor(Color.WHITE)
-            textSize = 15f
-            setPadding(16, 0, 8, 0)
-            setOnClickListener { binding.mainContainer.removeView(banner) }
-        }
-
-        banner.addView(messageText)
-        banner.addView(updateBtn)
-        banner.addView(closeBtn)
-
-        val params = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.BOTTOM
-            setMargins(24, 0, 24, 24)
-        }
-        binding.mainContainer.addView(banner, params)
     }
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     private fun setupWebView() {
         WebViewSupport.applyDefaults(webView)
 
-        webView.addJavascriptInterface(
-            SchoolJsBridge(
-                this,
-                webView,
-                { lastFailedUrl ?: mainUrl }
-            ) { enabled -> swipeRefresh.isEnabled = enabled },
-            WebViewSupport.JS_BRIDGE
-        )
+        jsBridge = SchoolJsBridge(
+            this,
+            webView,
+            { lastFailedUrl ?: mainUrl }
+        ) { enabled -> swipeRefresh.isEnabled = enabled }
+        webView.addJavascriptInterface(jsBridge, WebViewSupport.JS_BRIDGE)
 
         WebViewSupport.installDownloadHandler(webView, this)
 
@@ -338,12 +306,19 @@ class MainActivity : AppCompatActivity() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 progressBar.visibility = View.VISIBLE
                 swipeRefresh.isEnabled = true
+                // حارس سياق الجسر — يُضبَط على الخيط الرئيسي (قراءة webView.url من خيط الجسر
+                // غير آمنة). راجع SchoolJsBridge.setPageTrusted.
+                jsBridge.setPageTrusted(url != null && AppConfig.isTrustedSslDomain(url))
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 progressBar.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
-                if (url != null && url.startsWith("http")) showingError = false
+                if (url != null && url.startsWith("http")) {
+                    showingError = false
+                    failoverAttempted = false
+                    AppConfig.noteSuccessfulUrl(url)
+                }
                 // بعد العودة من منصة المعلم/الطالب: امسح سجل التنقل بعد اكتمال
                 // تحميل الرئيسية → زر الرجوع يعرض dialog الخروج مباشرة (حالة نظيفة)
                 if (pendingClearHistory && url != null && url.startsWith("http")) {
@@ -377,7 +352,20 @@ class MainActivity : AppCompatActivity() {
             ) {
                 if (request?.isForMainFrame != true) return
                 Log.e(TAG, "Error ${error?.errorCode}: ${error?.description}")
-                lastFailedUrl = request.url?.toString() ?: mainUrl
+                val failed = request.url?.toString() ?: mainUrl
+                lastFailedUrl = failed
+
+                // تجاوز فشل النطاق (نفس منطق BaseWebViewActivity): النطاقات الثلاثة على نفس
+                // الـWorker، فإن حُجب الحالي نُجرّب التالي قبل إظهار أي رسالة خطأ.
+                val next = if (!failoverAttempted) AppConfig.nextHostUrl(failed) else null
+                if (next != null) {
+                    failoverAttempted = true
+                    Log.w(TAG, "Host failover → $next")
+                    stopIndicators()
+                    loadTarget(next)
+                    return
+                }
+
                 stopIndicators()
                 showError(sslError = false)
             }
@@ -462,6 +450,5 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainWebView"
-        private const val UPDATE_BANNER_TAG = "update_banner"
     }
 }
