@@ -25,8 +25,14 @@ android {
         applicationId = "com.proconrers.schoolappyemen"
         minSdk = 24
         targetSdk = 35
-        versionCode = 30
-        versionName = "2.7"
+        // 🔴 المنشور على Play: versionCode 31 / versionName "2.8" (نُشر 2026-07-17 07:40).
+        // صُولِح هنا 2026-08-11: كان المستودع على 30/"2.7" — أي أن vc31 بُني ونُشر دون أن
+        // يُسجَّل رفع الرقم في git، فمن يقرأ هذا السطر يستنتج المنشور خطأً بإصدار واحد.
+        // الحزم محفوظة في Workspace\Releases\SchoolAppyemen\ (فيه README يحدّد الحيّة).
+        // ⇒ أي إصدار قادم يبدأ من 32 فأعلى؛ Play يرفض إعادة استخدام 31 ولو لم يعرفه
+        //   المستودع، وخطؤه («رمز الإصدار مستخدَم») يبدو غامضاً بلا هذا التعليق.
+        versionCode = 31
+        versionName = "2.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
