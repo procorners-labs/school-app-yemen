@@ -14,6 +14,8 @@ import android.webkit.URLUtil
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.Toast
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 
 /**
  * WebViewSupport — أدوات مشتركة لكل شاشات الـ WebView (مبدأ DRY).
@@ -70,6 +72,46 @@ object WebViewSupport {
         }
         webView.isScrollbarFadingEnabled = true
         webView.overScrollMode = WebView.OVER_SCROLL_NEVER
+        enableWebAuthn(webView)
+    }
+
+    /**
+     * يفعّل **WebAuthn** داخل الـWebView — وهو ما يجعل «الدخول بالبصمة» يعمل في التطبيق.
+     *
+     * 🔴 الحقيقة غير البديهية: `android.webkit.WebView` **لا تدعم WebAuthn افتراضياً**
+     * ولو دعمها Chrome على نفس الجهاز. فالصفحة تنفّذ
+     * `PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()` فتحصل على
+     * `false` (أو يفشل `navigator.credentials.get`) ⇒ `_biomSupported()` في
+     * `teacher/_js-platform-reviews.html` و`student/Student Portal.html` تُخفي الزرّ،
+     * فيبدو أن «الميزة غير موجودة في التطبيق» وهي مبنيّة بالكامل ومنشورة.
+     *
+     * ⇒ **لا نبني نظام بصمة أصلياً.** النظام القائم أقوى: WebAuthn + امتداد PRF +
+     *   اشتقاق HKDF + تشفير AES-GCM للسرّ، وإدارة أجهزة في ورقة «أجهزة_البصمة».
+     *   المطلوب من الغلاف تفعيلٌ واحد فقط.
+     *
+     * `WEB_AUTHENTICATION_SUPPORT_FOR_APP`: بيانات الاعتماد مربوطة **بهذا التطبيق**،
+     * ويشترطه النظام بتحقّق Digital Asset Links على النطاق — وهو نفس
+     * `/.well-known/assetlinks.json` الذي تحتاجه روابط التطبيق (App Links). ملفٌّ واحد
+     * يخدم الميزتين.
+     *
+     * يتطلّب WebView 122+ على الجهاز؛ الحارس [WebViewFeature.isFeatureSupported] يجعل
+     * غيابه هبوطاً هادئاً لا انهياراً — والصفحة تُخفي الزرّ من تلقائها كما تفعل اليوم.
+     */
+    private fun enableWebAuthn(webView: WebView) {
+        try {
+            if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)) {
+                Log.i(TAG, "WebAuthn unsupported by this WebView — biometric login stays hidden")
+                return
+            }
+            WebSettingsCompat.setWebAuthenticationSupport(
+                webView.settings,
+                WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_APP
+            )
+            Log.d(TAG, "WebAuthn enabled (FOR_APP)")
+        } catch (e: Throwable) {
+            // لا تُسقِط الـWebView لأجل ميزة اختيارية.
+            Log.w(TAG, "enableWebAuthn failed: ${e.message}")
+        }
     }
 
     /**

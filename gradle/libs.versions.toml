@@ -21,8 +21,6 @@ swiperefreshlayout  = "1.1.0"
 # ── Support ────────────────────────────────────────────────────────────────
 multidex            = "2.0.1"
 webkit              = "1.12.1"
-biometric           = "1.1.0"
-securityCrypto      = "1.0.0"
 activityKtx         = "1.9.3"
 lifecycleRuntimeKtx = "2.8.7"
 
@@ -51,8 +49,6 @@ androidx-swiperefreshlayout    = { group = "androidx.swiperefreshlayout", name =
 # ── Support ────────────────────────────────────────────────────────────────
 androidx-multidex              = { group = "androidx.multidex",          name = "multidex",              version.ref = "multidex"             }
 androidx-webkit                = { group = "androidx.webkit",            name = "webkit",                version.ref = "webkit"               }
-androidx-biometric             = { group = "androidx.biometric",         name = "biometric",             version.ref = "biometric"            }
-androidx-security-crypto       = { group = "androidx.security",          name = "security-crypto",       version.ref = "securityCrypto"       }
 androidx-activity-ktx          = { group = "androidx.activity",          name = "activity-ktx",          version.ref = "activityKtx"          }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle",         name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx"  }
 

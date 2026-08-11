@@ -23,12 +23,9 @@
     <string name="fcm_default_channel_name">أخبار وإشعارات المدرسة</string>
     <string name="fcm_default_channel_desc">إشعارات الأخبار والتنبيهات من مدارس الإبداع والتميز الدولية</string>
 
-    <!-- الدخول بالبصمة -->
-    <string name="biometric_title">الدخول بالبصمة</string>
-    <string name="biometric_subtitle">تحقّق من هويتك لإكمال تسجيل الدخول</string>
-    <string name="biometric_cancel">إلغاء</string>
-    <string name="biometric_save_title">تفعيل الدخول بالبصمة</string>
-    <string name="biometric_save_message">هل تريد حفظ بيانات دخولك على هذا الجهاز وفتحها ببصمتك في المرات القادمة؟ تُخزَّن مشفَّرة داخل الجهاز ولا تُرسَل إلى أي جهة.</string>
-    <string name="biometric_save_yes">نعم، فعّلها</string>
-    <string name="biometric_save_no">لا، شكراً</string>
+    <!--
+        🔒 لا نصوص بصمة هنا عمداً: واجهة «الدخول بالبصمة» كاملةً تعيش في صفحة الويب
+        (‏`teacher/_js-platform-reviews.html` · `student/Student Portal.html`) وتعمل على
+        WebAuthn. دور التطبيق تفعيلُها في الـWebView فقط — `WebViewSupport.enableWebAuthn`.
+    -->
 </resources>

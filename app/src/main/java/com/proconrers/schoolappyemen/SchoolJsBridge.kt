@@ -41,8 +41,6 @@ class SchoolJsBridge(
     private val setSwipeEnabled: (Boolean) -> Unit
 ) {
 
-    private val biometric by lazy { BiometricAuthManager(activity) }
-
     @JavascriptInterface
     fun retry() {
         activity.runOnUiThread { webView.loadUrl(targetUrl()) }
@@ -60,51 +58,12 @@ class SchoolJsBridge(
     fun getFcmToken(): String = SchoolFcmService.savedToken(activity)
 
     // ── الدخول بالبصمة ────────────────────────────────────────────────────────
-
-    @JavascriptInterface
-    fun isBiometricAvailable(): Boolean = biometric.isAvailable()
-
-    @JavascriptInterface
-    fun hasBiometricLogin(scope: String): Boolean = biometric.hasSavedLogin(scope)
-
-    /** يُستدعى بعد دخول ناجح — يعرض تأكيداً بشرياً ثم يحفظ. لا حفظ صامت. */
-    @JavascriptInterface
-    fun saveBiometricLogin(scope: String, username: String, password: String) {
-        biometric.offerSave(activity, scope, username, password)
-    }
-
-    @JavascriptInterface
-    fun clearBiometricLogin(scope: String) {
-        biometric.clear(scope)
-    }
-
-    /**
-     * يطلب البصمة ويردّ **غير متزامن** على الويب:
-     *   نجاح ⇒ `window.__onBiometricLogin(scope, username, password)`
-     *   إخفاق ⇒ `window.__onBiometricLoginFailed(scope, reason)`
-     * الويب هو من يملأ حقوله ويُرسل — فلا محدِّدات نموذج داخل Kotlin تتقادم بصمت.
-     */
-    @JavascriptInterface
-    fun requestBiometricLogin(scope: String) {
-        biometric.authenticate(
-            activity, scope,
-            onSuccess = { u, p -> callJs("window.__onBiometricLogin", scope, u, p) },
-            onFailure = { reason -> callJs("window.__onBiometricLoginFailed", scope, reason) }
-        )
-    }
-
-    /** ينادي دالّة في الصفحة بوسائط نصّية مُهرَّبة بـJSON — الحارس `typeof` يمنع أي رمي. */
-    private fun callJs(fn: String, vararg args: String) {
-        val encoded = args.joinToString(",") { org.json.JSONObject.quote(it) }
-        val js = "if (typeof $fn === 'function') { $fn($encoded); }"
-        activity.runOnUiThread {
-            try {
-                webView.evaluateJavascript(js, null)
-            } catch (e: Exception) {
-                Log.e(TAG, "callJs failed: ${e.message}")
-            }
-        }
-    }
+    // 🔴 **لا شيء هنا عمداً.** نظام البصمة مبنيّ بالكامل في الويب أصلاً
+    // (‏`teacher/BiometricAuth.js` · `student/BiometricAuth.js` + ورقة «أجهزة_البصمة»)
+    // على WebAuthn مع امتداد PRF وتشفير AES-GCM حقيقي. وكانت المحاولة الأولى هنا تبني
+    // بديلاً يخزّن كلمة المرور في `EncryptedSharedPreferences` — أضعف أمنياً ومكرّر
+    // لنظام يعمل. المطلوب من التطبيق **تفعيلٌ واحد** لا نظامٌ ثانٍ:
+    // `WebViewSupport.enableWebAuthn` (‏WebView لا تدعم WebAuthn افتراضياً).
 
     // ── حفظ الملفات المولَّدة في المتصفّح ──────────────────────────────────────
 

@@ -114,13 +114,10 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.swiperefreshlayout)
 
-    // ── الدخول بالبصمة ────────────────────────────────────────────────────
-    // مكتبتان مستقرّتان مكتوبتان بجافا — لا بيانات وصفية Kotlin حديثة، فلا تفرضان
-    // ترقية مترجم Kotlin 1.9.0 الحالي (قيد مقصود: المهلة لا تحتمل ترقية سلسلة أدوات).
-    implementation(libs.androidx.biometric)
-    implementation(libs.androidx.security.crypto)
-
     // ── Support ───────────────────────────────────────────────────────────
+    // 🔒 لا `androidx.biometric` ولا `security-crypto` هنا عمداً: البصمة تعمل عبر
+    //    WebAuthn داخل الصفحة نفسها (‏`androidx.webkit` أدناه يفعّلها) — راجع التعليق
+    //    في `SchoolJsBridge`. إضافة مكتبة بصمة أصلية تعني نظاماً ثانياً مكرَّراً أضعف.
     implementation(libs.androidx.multidex)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.activity.ktx)
