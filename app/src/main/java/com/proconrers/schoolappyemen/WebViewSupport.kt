@@ -72,9 +72,28 @@ object WebViewSupport {
         webView.overScrollMode = WebView.OVER_SCROLL_NEVER
     }
 
-    /** هل الرابط من نطاقات Google الموثوقة (إعادة توجيه Apps Script، صور Drive…)؟ */
-    fun isGoogleDomain(url: String): Boolean =
-        url.contains("google.com") || url.contains("googleusercontent.com")
+    /**
+     * يحقن رمز جهاز الإشعارات في الصفحة بعد اكتمال تحميلها.
+     *
+     * شبكة أمان مقصودة لا المسار الأساسي: المسار الأساسي أن تقرأه الصفحة بنفسها من
+     * `AndroidApp.getFcmToken()` **بعد تسجيل الدخول** (‏`_initFcmBridge`)، لأن نقطة
+     * التسجيل على الخادم محروسة بجلسة. أما هذا الحقن فيغطّي **تجديد الرمز** بينما
+     * المستخدم داخل جلسة قائمة — عندها `registerFcmToken` تجد `App.user` وتُرسل فوراً.
+     * وإن لم تكن هناك جلسة، تخرج الدالّة في الويب بصمت بلا أي أثر.
+     */
+    fun injectFcmToken(webView: WebView?, context: Context) {
+        val view = webView ?: return
+        val token = SchoolFcmService.savedToken(context)
+        if (token.isBlank()) return
+        val quoted = org.json.JSONObject.quote(token)
+        val js = "window.__FCM_TOKEN__=$quoted;" +
+            "if(typeof window.registerFcmToken==='function'){window.registerFcmToken($quoted);}"
+        try {
+            view.evaluateJavascript(js, null)
+        } catch (e: Exception) {
+            Log.w(TAG, "injectFcmToken failed: ${e.message}")
+        }
+    }
 
     /**
      * صفحة خطأ HTML موحّدة. زر «إعادة المحاولة» ينادي الجسر الأصلي

@@ -2,6 +2,7 @@ package com.proconrers.schoolappyemen
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.Uri
 import android.util.Log
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -9,22 +10,35 @@ import java.net.URL
 import kotlin.concurrent.thread
 
 /**
- * AppConfig — المصدر المركزي لروابط النشر، مع جلب ديناميكي من الخادم.
+ * AppConfig — المصدر المركزي لروابط المنصّات **ولقرار «داخلي أم خارجي»**.
  *
- * المعمارية الجديدة:
- *  1. تُحفَظ الروابط الحالية في SharedPreferences (ذاكرة دائمة على الجهاز)
- *  2. عند الإقلاع: تُجلَب الروابط الأحدث من الخادم في الخلفية وتُحدَّث
- *  3. إذا فشل الجلب: تُستخدم القيم المحفوظة، أو الافتراضيات لو كانت أول مرة
+ * ── ما تغيّر في vc32 (2026-08-12) ولماذا ─────────────────────────────────────
  *
- * هذا يعني:
- *  - عند إعادة نشر أي منصة: حدّث ScriptProperties في Apps Script فقط
- *  - التطبيق سيلتقط التحديث في الإقلاع التالي (بدون نشر APK جديد)
+ * ① **النطاق الرسمي.** الروابط انتقلت من `school.procorners.com` إلى
+ *    `https://yemenschoolz.com` — النطاق الرئيسي للمشروع بقرار مالك منذ 2026-07-28.
+ *    النطاقان الإرثيان يبقيان **يعملان ويُعدّان داخليَّين** (نسخ قديمة مثبَّتة عند
+ *    مستخدمين، ولا 301 منهما أبداً).
+ *
+ * ② 🔴 **التوجيه صار بالمضيف + بادئة المسار، بدل `contains` على مقطع نصّي.**
+ *    القديم:  `Regex("/(home|student|teacher|cms|schedule)/")` ثم `url.contains(seg)`.
+ *    وأثره المقيس أن هذه الروابط كانت تُعدّ **خارجية** فتفتح المتصفّح وتترك التطبيق فارغاً:
+ *      · `yemenschoolz.com/portal`            ← رابط منصّة الطالب القصير
+ *      · `yemenschoolz.com/abdaawatmuaz`      ← صفحة المدرسة العامّة (الـslug)
+ *      · `yemenschoolz.com/abdaawatmuaz?news=…` ← رابط مشاركة الخبر
+ *      · `…/schedule/index.html`               ← لم يطابق أي رابط منصّة إطلاقاً
+ *    وكانت `isTrustedSslDomain` بنفس العلّة أمنياً: `url.contains("procorners.com")`
+ *    يُمرِّر `https://evil.com/?x=procorners.com` كنطاق موثوق.
+ *
+ * ③ **المزامنة الديناميكية تبقى معطّلة** (`syncIfNeeded` معلّقة) — راجع تحذيرها أدناه.
  */
 object AppConfig {
 
     private const val TAG = "AppConfig"
     private const val PREFS_NAME = "deployment_config_v3"
     private const val PREFS_LAST_UPDATE = "last_update_ts"
+
+    /** مفتاح Intent يحمل رابطاً محدَّداً يجب فتحه (Deep Link أو ضغطة إشعار). */
+    const val EXTRA_TARGET_URL = "com.proconrers.schoolappyemen.TARGET_URL"
 
     // مفاتيح SharedPreferences
     private const val KEY_HOME     = "url_home"
@@ -34,23 +48,27 @@ object AppConfig {
     private const val KEY_SCHEDULE = "url_schedule"
     private const val KEY_MASTER   = "url_master"
 
-    // ─── الروابط الافتراضية (تُستخدم فقط في الإقلاع الأول قبل أول مزامنة) ──
-    // النطاق الأساسي: school.procorners.com (نطاق مخصّص يتفادى حجب workers.dev على يمن نت،
-    // راجع _docs/2026-07-16-حجب-يمن-نت-workers-dev-ونطاق-مخصص.md في مستودع school-app-yemen-gas).
-    // القديم workers.dev لا يزال مضافاً في trustedSslDomains أدناه كمسار احتياطي، بلا حذف.
-    // ?school=<uuid>: معرّف مدارس الإبداع والتميز الدولية الفعلي في سجل Master_Admin_School —
-    // تحقّقتُ منه بقراءة حيّة للسجل (2026-07-17)، توضيح صريح بدل اعتماد ضمني على مدرسة افتراضية.
-    private const val EBDAA_SCHOOL_ID = "12725ed7-c139-422c-a2d1-ec0ddd358104"
+    // ─── الهوية والنطاق ───────────────────────────────────────────────────────
+    /** معرّف «مدارس الإبداع والتميز الدولية» في سجل `Master_Admin_School`. */
+    const val EBDAA_SCHOOL_ID = "12725ed7-c139-422c-a2d1-ec0ddd358104"
+
+    /** الـslug العامّ لنفس المدرسة — يخدم `yemenschoolz.com/abdaawatmuaz`. */
+    const val EBDAA_SLUG = "abdaawatmuaz"
+
+    /** الأصل الرسمي. كل رابط جديد يُبنى منه. */
+    const val CANONICAL_ORIGIN = "https://yemenschoolz.com"
+
+    // ─── الروابط الافتراضية ───────────────────────────────────────────────────
     private const val DEFAULT_HOME =
-        "https://school.procorners.com/home/index.html?school=$EBDAA_SCHOOL_ID"
+        "$CANONICAL_ORIGIN/home/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_CMS =
-        "https://school.procorners.com/cms/index.html?school=$EBDAA_SCHOOL_ID"
+        "$CANONICAL_ORIGIN/cms/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_TEACHER =
-        "https://school.procorners.com/teacher/index.html?school=$EBDAA_SCHOOL_ID"
+        "$CANONICAL_ORIGIN/teacher/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_STUDENT =
-        "https://school.procorners.com/student/index.html?school=$EBDAA_SCHOOL_ID"
+        "$CANONICAL_ORIGIN/student/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_SCHEDULE =
-        "https://school.procorners.com/schedule/index.html?school=$EBDAA_SCHOOL_ID"
+        "$CANONICAL_ORIGIN/schedule/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_MASTER =
         "https://script.google.com/macros/s/AKfycbx5H6uYXb-6iVt_nT4YkdnYMhl6eZJSDxsULsKa2eyblZQcwzRo4CXR3Mh_ecRSZd4M/exec"
 
@@ -60,16 +78,17 @@ object AppConfig {
     private var prefs: SharedPreferences? = null
     private var initialized = false
 
-    /**
-     * تهيئة AppConfig — تُستدعى مرة واحدة في SplashActivity أو Application
-     */
     fun init(context: Context) {
         if (initialized) return
         prefs = context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         initialized = true
 
-        // ⛔ مُعطّلة: التطبيق يستخدم روابط الـ Worker الثابتة (لا مزامنة GAS)
+        // ⛔ مُعطّلة عمداً: التطبيق يستخدم روابط الوسيط الثابتة.
+        // 🔴 ولا تُعِد تفعيلها قبل إصلاح `isValidUrl` أدناه — فهي تقبل روابط
+        //    `script.google.com/.../exec` **وحدها**، أي أن أول مزامنة ناجحة ستدهس
+        //    روابط الوسيط بروابط GAS خام فتفقد المنصّة الوسيط كاملاً (حاجز التزاحم،
+        //    إعادة المحاولة، إعادة كتابة /portal، رؤوس الهوية).
         // syncIfNeeded()
     }
 
@@ -85,61 +104,112 @@ object AppConfig {
         return prefs?.getString(key, defaultValue) ?: defaultValue
     }
 
-    // ─── دوال التوجيه (تُستخدم في shouldOverrideUrlLoading) ──────────────────
-    fun isTeacherUrl(url: String): Boolean = matchesDeployment(url, TEACHER_URL)
-    fun isStudentUrl(url: String): Boolean = matchesDeployment(url, STUDENT_URL)
-    fun isCmsUrl(url: String): Boolean = matchesDeployment(url, CMS_URL)
-    fun isHomeUrl(url: String): Boolean = matchesDeployment(url, HOME_URL)
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  التوجيه — مصدر الحقيقة الوحيد لقرار «أين يُفتح هذا الرابط؟»
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    fun isKnownDeployment(url: String): Boolean =
-        isTeacherUrl(url) || isStudentUrl(url) || isCmsUrl(url) || isHomeUrl(url)
+    /** وجهة الرابط. `STAY` = يُحمَّل في الـWebView الحالي أياً كان النشاط. */
+    enum class LinkTarget { HOME, TEACHER, STUDENT, STAY, EXTERNAL }
 
     /**
-     * مقارنة ذكية — تستخرج الـ deployment ID وتُطابقه
-     * (يحلّ مشكلة إعادة التوجيه عبر /macros/r/)
+     * مضيفات المنصّة — كلها داخلية.
+     * 🔴 الإرثيان يبقيان: نسخ أندرويد سابقة تحمل روابطهما مجمَّدة في الـAPK، وإخراجهما
+     *    من هذه القائمة يقذف مستخدميها إلى المتصفّح بلا رجعة.
      */
-    private fun matchesDeployment(url: String, deploymentUrl: String): Boolean {
-        if (url.isBlank() || deploymentUrl.isBlank()) return false
-        val id = extractDeploymentId(deploymentUrl)
-        if (id != null) return url.contains(id, ignoreCase = true)
-        // روابط الـ Worker: طابِق حسب مسار الصفحة (/teacher/ , /student/ ...)
-        val seg = extractWorkerSegment(deploymentUrl)
-        return seg != null && url.contains(seg, ignoreCase = true)
-    }
+    private val PLATFORM_HOSTS = listOf(
+        "yemenschoolz.com",
+        "school.procorners.com",
+        "school-teacher-proxy.procorners-shop.workers.dev"
+    )
 
-    private fun extractWorkerSegment(url: String): String? {
-        return Regex("/(home|student|teacher|cms|schedule)/").find(url)?.value
-    }
-
-    private fun extractDeploymentId(url: String): String? {
-        val regex = Regex("""/macros/s/([^/]+)/exec""")
-        return regex.find(url)?.groupValues?.getOrNull(1)
-    }
-
-    // ─── النطاقات الموثوقة (SSL) ──────────────────────────────────────────────
-    val trustedSslDomains: List<String> = listOf(
-        "procorners.com",
-        "workers.dev",
+    /** نطاقات Google — تبقى داخل الـWebView (إعادة توجيه Apps Script · Drive · حسابات). */
+    private val GOOGLE_HOSTS = listOf(
         "google.com",
-        "script.google.com",
-        "script.googleusercontent.com",
         "googleusercontent.com",
         "googleapis.com",
         "gstatic.com",
-        "docs.google.com",
-        "drive.google.com",
-        "accounts.google.com"
+        "googlevideo.com"
     )
 
-    fun isTrustedSslDomain(url: String): Boolean =
-        trustedSslDomains.any { domain -> url.contains(domain, ignoreCase = true) }
+    /**
+     * مطابقة مضيف حقيقية: تساوٍ تامّ أو نطاق فرعي صريح.
+     * (‏`www.yemenschoolz.com` يُطابِق `yemenschoolz.com` بهذه القاعدة.)
+     * 🔴 لا `contains` — `evil.com/?x=yemenschoolz.com` يجب أن يفشل.
+     */
+    private fun hostMatches(host: String, domain: String): Boolean =
+        host == domain || host.endsWith(".$domain")
 
-    // ─── المزامنة من الخادم ──────────────────────────────────────────────────
+    private fun isPlatformHost(host: String): Boolean =
+        PLATFORM_HOSTS.any { hostMatches(host, it) }
+
+    private fun isGoogleHost(host: String): Boolean =
+        GOOGLE_HOSTS.any { hostMatches(host, it) }
+
+    /** هل المسار ضمن قسم معيّن؟ يقبل `/teacher` و`/teacher/` و`/teacher/index.html`. */
+    private fun inSection(path: String, section: String): Boolean =
+        path == "/$section" || path == "/$section/" || path.startsWith("/$section/")
 
     /**
-     * يجلب الروابط الأحدث من Apps Script في خيط خلفي
-     * يُستدعى تلقائياً من init() عند الحاجة
+     * مسارات خدمة يجب أن تبقى في نفس الـWebView مهما كان النشاط
+     * (نقاط API ووسائط وأصول — ليست صفحات تنقّل).
      */
+    private val STAY_SECTIONS = listOf("gas", "media", "assets", "drive-upload", "qr-img", "qr-download")
+
+    /**
+     * يحسب وجهة أي رابط. هذه الدالّة **نقيّة** (بلا حالة ولا Android context) عمداً
+     * كي تكون قابلة للاختبار مباشرةً.
+     */
+    fun routeTargetFor(url: String): LinkTarget {
+        if (url.isBlank()) return LinkTarget.STAY
+
+        val uri = try { Uri.parse(url) } catch (e: Exception) { null }
+            ?: return LinkTarget.EXTERNAL
+
+        val scheme = (uri.scheme ?: "").lowercase()
+        // ‏`tel:` · `mailto:` · `whatsapp:` · `intent:` … ⇒ تطبيق خارجي دائماً.
+        if (scheme != "http" && scheme != "https") return LinkTarget.EXTERNAL
+
+        val host = (uri.host ?: "").lowercase()
+        if (host.isBlank()) return LinkTarget.STAY
+
+        if (isGoogleHost(host)) return LinkTarget.STAY
+        if (!isPlatformHost(host)) return LinkTarget.EXTERNAL
+
+        val path = (uri.path ?: "/").ifBlank { "/" }.lowercase()
+
+        if (STAY_SECTIONS.any { inSection(path, it) }) return LinkTarget.STAY
+        if (inSection(path, "teacher")) return LinkTarget.TEACHER
+        // ‏`/portal` رابط منصّة الطالب القصير — الوسيط يعيد كتابته داخلياً إلى
+        // `/student/index.html` (‏200، والاستعلام `?school=` ينجو — مقيس 2026-08-12).
+        if (inSection(path, "student") || inSection(path, "portal")) return LinkTarget.STUDENT
+        // ‏`schedule` بلا نشاط مخصّص: يبقى في الـWebView الحالي بدل قذفه للمتصفّح
+        // (‏كان يُعدّ خارجياً قبل vc32 لأنه لم يطابق أي رابط منصّة).
+        if (inSection(path, "schedule")) return LinkTarget.STAY
+
+        // كل ما تبقّى على مضيف المنصّة صفحةُ واجهة عامّة: الجذر · `/home/**` ·
+        // `/home-all-school/**` · `/cms/**` · `/pricing` · `/<slug>` وصفحة الخبر.
+        return LinkTarget.HOME
+    }
+
+    /** هل الرابط داخل المنصّة أصلاً (أي ليس `EXTERNAL`)؟ */
+    fun isInternalUrl(url: String): Boolean = routeTargetFor(url) != LinkTarget.EXTERNAL
+
+    // ─── نطاقات SSL الموثوقة ──────────────────────────────────────────────────
+    /**
+     * تُقرأ في `onReceivedSslError` وحده. مطابقة **مضيف** لا `contains`
+     * (‏القديم كان يُمرِّر `https://evil.com/?x=procorners.com`).
+     */
+    private val TRUSTED_SSL_HOSTS: List<String> =
+        PLATFORM_HOSTS + GOOGLE_HOSTS + listOf("procorners.com")
+
+    fun isTrustedSslDomain(url: String): Boolean {
+        val host = try { Uri.parse(url).host } catch (e: Exception) { null } ?: return false
+        val h = host.lowercase()
+        return TRUSTED_SSL_HOSTS.any { hostMatches(h, it) }
+    }
+
+    // ─── المزامنة من الخادم (معطّلة — راجع التحذير في init) ───────────────────
+
     private fun syncIfNeeded() {
         val p = prefs ?: return
         val lastUpdate = p.getLong(PREFS_LAST_UPDATE, 0L)
@@ -152,7 +222,7 @@ object AppConfig {
 
         thread(start = true, isDaemon = true, name = "AppConfig-Sync") {
             try {
-                val baseUrl = HOME_URL  // أي منصة فيها DeploymentRegistry تكفي
+                val baseUrl = HOME_URL
                 val syncUrl = if (baseUrl.contains("?")) {
                     "$baseUrl&action=deployments"
                 } else {
@@ -184,9 +254,6 @@ object AppConfig {
         }
     }
 
-    /**
-     * تحليل JSON من الخادم وحفظ الروابط
-     */
     private fun parseAndStore(jsonText: String): Boolean {
         return try {
             val outer = JSONObject(jsonText)
@@ -208,22 +275,17 @@ object AppConfig {
         }
     }
 
+    /** 🔴 يقبل روابط GAS الخام وحدها — راجع تحذير `init` قبل إعادة تفعيل المزامنة. */
     private fun isValidUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         return url.startsWith("https://script.google.com/macros/") && url.endsWith("/exec")
     }
 
-    /**
-     * فرض إعادة المزامنة الآن (للتطوير/التشخيص)
-     */
     fun forceSync() {
         prefs?.edit()?.putLong(PREFS_LAST_UPDATE, 0L)?.apply()
         syncIfNeeded()
     }
 
-    /**
-     * إعادة تعيين كاملة (للتشخيص)
-     */
     fun reset() {
         prefs?.edit()?.clear()?.apply()
     }

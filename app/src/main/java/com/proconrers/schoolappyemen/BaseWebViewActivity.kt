@@ -15,7 +15,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.ContextCompat
 import com.proconrers.schoolappyemen.databinding.ActivityWebviewBinding
@@ -50,12 +49,18 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
     /** وسم السجل (Logcat). */
     protected abstract val logTag: String
 
+    /** الوجهة التي تمثّلها هذه الشاشة — يقرأها [LinkRouter] ليعرف «أنا هنا أصلاً». */
+    protected abstract val screenTarget: AppConfig.LinkTarget
+
     /**
-     * منطق التوجيه الخاص بكل منصة.
-     * @return true إذا عُولج الرابط خارجياً/بنشاط آخر (لا يُكمل التحميل هنا)،
-     *         false ليبقى الرابط داخل هذا الـ WebView.
+     * الرابط المطلوب فعلياً: ما حمله الـIntent (‏Deep Link · ضغطة إشعار · تنقّل من شاشة
+     * أخرى) وإلّا [startUrl]. يُتحقَّق أنه داخلي قبل تحميله — المصدر قد يكون
+     * `DeepLinkActivity` المُصدَّر.
      */
-    protected abstract fun routeUrl(url: String): Boolean
+    protected val requestedUrl: String
+        get() = intent?.getStringExtra(AppConfig.EXTRA_TARGET_URL)
+            ?.takeIf { AppConfig.isInternalUrl(it) }
+            ?: startUrl
 
     private val fileChooserLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -81,7 +86,8 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         AppConfig.init(applicationContext)
         binding = ActivityWebviewBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // 🔴 لا `WindowCompat.setDecorFitsSystemWindows` — راجع التعليق في MainActivity:
+        //   `enableEdgeToEdge()` يغطّيها، والنداء الصريح متوقّف نهائياً ورصده Play على vc31.
 
         // تطبيق padding ديناميكي للـ system bars + لوحة المفاتيح
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
@@ -108,10 +114,11 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         }
 
         // فحص مسبق للاتصال: إن لا إنترنت، أظهِر صفحة الخطأ فوراً بدل تحميل فاشل
+        val target = requestedUrl
         if (WebViewSupport.isOnline(this)) {
-            loadTarget(startUrl)
+            loadTarget(target)
         } else {
-            lastFailedUrl = startUrl
+            lastFailedUrl = target
             showError(sslError = false)
         }
 
@@ -239,6 +246,7 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
                 binding.swipeRefresh.isRefreshing = false
                 if (url != null && url.startsWith("http")) {
                     showingError = false
+                    WebViewSupport.injectFcmToken(view, this@BaseWebViewActivity)
                     // حفظ آخر URL حقيقي (ليس loginScreen) لاستخدامه عند التحديث
                     if (!url.contains("loginScreen") && url != startUrl) {
                         lastLoggedInUrl = url
@@ -251,7 +259,10 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
-                return routeUrl(url)
+                return LinkRouter.handle(
+                    this@BaseWebViewActivity, url, screenTarget,
+                    isMainFrame = request.isForMainFrame
+                )
             }
 
             @SuppressLint("WebViewClientOnReceivedSslError")

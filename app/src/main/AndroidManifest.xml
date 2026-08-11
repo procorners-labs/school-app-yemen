@@ -28,7 +28,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SchoolAppYemen"
         android:enableOnBackInvokedCallback="true"
-        tools:targetApi="35">
+        tools:targetApi="36">
 
         <!--
             SplashActivity — نقطة الدخول الرئيسية (LAUNCHER).
@@ -75,6 +75,37 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!--
+            DeepLinkActivity — نقطة دخول روابط yemenschoolz.com (2026-08-12، vc32).
+
+            🔴 قبل هذا الإصدار كان `intent-filter` الوحيد في التطبيق هو MAIN+LAUNCHER —
+            أي **صفر Deep Link**: كل رابط منصّة يصل من واتساب أو من إشعار كان يفتح
+            المتصفّح، ولو كان التطبيق مثبَّتاً. وهذه النافذة الوحيدة لإصلاحه، فالروابط
+            تُجمَّد في الـAPK ولا مزامنة ديناميكية (AppConfig.syncIfNeeded معطّلة عمداً).
+
+            - `android:exported="true"` إلزامي لأي intent-filter من خارج التطبيق.
+            - `autoVerify="true"` يجعله App Link مُتحقَّقاً (بلا منتقي تطبيقات) — ويشترط
+              أن يخدم النطاق `/.well-known/assetlinks.json` ببصمة **مفتاح توقيع Play**
+              لا بصمة مفتاح الرفع. بلا الملف يعمل الرابط لكن بمنتقٍ، لا يتعطّل شيء.
+            - `noHistory` + `excludeFromRecents`: نشاط توجيه لحظي لا يظهر في «الأخيرة».
+            - النطاقان الإرثيان (school.procorners.com · workers.dev) **لا يُضافان هنا
+              عمداً**: نُسخ أندرويد قديمة تعتمدهما، وإدراجهما يخطف روابطها بلا داعٍ.
+        -->
+        <activity
+            android:name=".DeepLinkActivity"
+            android:exported="true"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="yemenschoolz.com" />
+                <data android:scheme="https" android:host="www.yemenschoolz.com" />
+            </intent-filter>
+        </activity>
 
         <!-- Firebase Cloud Messaging — استقبال وعرض الإشعارات (راجع SchoolFcmService.kt) -->
         <service
