@@ -1,6 +1,5 @@
 package com.proconrers.schoolappyemen
 
-import android.app.Activity
 import android.content.ContentValues
 import android.os.Build
 import android.os.Environment
@@ -10,26 +9,33 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.Toast
+import androidx.fragment.app.FragmentActivity
 import java.io.File
 import java.io.FileOutputStream
 
 /**
- * SchoolJsBridge — جسر JavaScript ↔ أندرويد (window.AndroidApp).
+ * SchoolJsBridge — جسر JavaScript ↔ أندرويد (‏`window.AndroidApp`).
  *
- *   - retry(): يعيد تحميل الرابط الهدف الحقيقي (إصلاح زرّ «إعادة المحاولة»
- *     بدل location.reload الذي كان يعيد صفحة الخطأ نفسها).
- *   - saveBase64(): يحفظ ملفاً وُلِّد داخل المتصفح (blob: مثل تصدير Excel من
- *     SheetJS) إلى مجلد «التنزيلات» العام.
- *   - setSwipeRefreshEnabled(): يعطّل/يفعّل SwipeRefreshLayout الأصلي — طبقة
- *     منفصلة تماماً عن حارس سحب-التحديث في صفحة الويب، لا تعرف شيئاً عن حالة
- *     الدرج الجانبي هناك. تستدعيها Teacher Dashboard.html عند فتح/إغلاق الدرج
- *     كي لا يتعارض سحب اللمس داخل الدرج المفتوح مع تحديث WebView الأصلي.
+ *   - `retry()` — يعيد تحميل الرابط الهدف الحقيقي (بدل `location.reload` الذي كان يعيد
+ *     صفحة الخطأ نفسها).
+ *   - `saveBase64()` — يحفظ ملفاً وُلِّد في المتصفّح (‏`blob:` مثل تصدير Excel) إلى «التنزيلات».
+ *   - `setSwipeRefreshEnabled()` — يعطّل/يفعّل SwipeRefreshLayout الأصلي عند فتح الدرج الجانبي.
+ *   - **`getFcmToken()`** (vc32) — رمز جهاز الإشعارات، ليرفعه الويب بعد الدخول عبر
+ *     `registerDeviceTokenProtected`. كان الويب يبحث عن `AndroidPush.getToken` أو
+ *     `SchoolAppNative.getFcmToken` — واسمُ الجسر الفعلي `AndroidApp`، فلم يجد شيئاً قطّ
+ *     وبقيت ورقة «أجهزة_الإشعارات» فارغة (‏`ZERO_READERS`).
+ *   - **بصمة** (vc32): `isBiometricAvailable` · `hasBiometricLogin` · `requestBiometricLogin`
+ *     · `saveBiometricLogin` · `clearBiometricLogin` — راجع [BiometricAuthManager].
  *
- * @param targetUrl دالة تُرجِع الرابط الذي يجب إعادة تحميله عند retry().
- * @param setSwipeEnabled دالة تُبدِّل حالة SwipeRefreshLayout.isEnabled.
+ * 🔴 كل دالّة هنا تُنفَّذ على **خيط Binder** لا على خيط الواجهة، وأي لمس للواجهة يمرّ
+ *    بـ`runOnUiThread`. وأي دالّة تحتاج انتظار المستخدم **لا تُرجِع نتيجة** بل ترُدّ
+ *    لاحقاً بـ`evaluateJavascript` — الحجب هنا يُجمّد الصفحة.
+ *
+ * @param targetUrl دالة تُرجِع الرابط الذي يجب إعادة تحميله عند `retry()`.
+ * @param setSwipeEnabled دالة تُبدِّل حالة `SwipeRefreshLayout.isEnabled`.
  */
 class SchoolJsBridge(
-    private val activity: Activity,
+    private val activity: FragmentActivity,
     private val webView: WebView,
     private val targetUrl: () -> String,
     private val setSwipeEnabled: (Boolean) -> Unit
@@ -44,6 +50,22 @@ class SchoolJsBridge(
     fun setSwipeRefreshEnabled(enabled: Boolean) {
         activity.runOnUiThread { setSwipeEnabled(enabled) }
     }
+
+    // ── إشعارات ───────────────────────────────────────────────────────────────
+
+    /** رمز جهاز FCM المحفوظ محلياً، أو نصّ فارغ إن لم يصل بعد. */
+    @JavascriptInterface
+    fun getFcmToken(): String = SchoolFcmService.savedToken(activity)
+
+    // ── الدخول بالبصمة ────────────────────────────────────────────────────────
+    // 🔴 **لا شيء هنا عمداً.** نظام البصمة مبنيّ بالكامل في الويب أصلاً
+    // (‏`teacher/BiometricAuth.js` · `student/BiometricAuth.js` + ورقة «أجهزة_البصمة»)
+    // على WebAuthn مع امتداد PRF وتشفير AES-GCM حقيقي. وكانت المحاولة الأولى هنا تبني
+    // بديلاً يخزّن كلمة المرور في `EncryptedSharedPreferences` — أضعف أمنياً ومكرّر
+    // لنظام يعمل. المطلوب من التطبيق **تفعيلٌ واحد** لا نظامٌ ثانٍ:
+    // `WebViewSupport.enableWebAuthn` (‏WebView لا تدعم WebAuthn افتراضياً).
+
+    // ── حفظ الملفات المولَّدة في المتصفّح ──────────────────────────────────────
 
     @JavascriptInterface
     fun saveBase64(dataUrl: String, fileName: String, mimeType: String) {
@@ -75,12 +97,16 @@ class SchoolJsBridge(
             }
             toast("تم حفظ الملف في «التنزيلات»: $name")
         } catch (e: Exception) {
-            Log.e("SchoolJsBridge", "saveBase64 failed", e)
+            Log.e(TAG, "saveBase64 failed", e)
             toast("تعذّر حفظ الملف")
         }
     }
 
     private fun toast(msg: String) {
         activity.runOnUiThread { Toast.makeText(activity, msg, Toast.LENGTH_LONG).show() }
+    }
+
+    private companion object {
+        const val TAG = "SchoolJsBridge"
     }
 }

@@ -24,15 +24,19 @@ android {
     defaultConfig {
         applicationId = "com.proconrers.schoolappyemen"
         minSdk = 24
-        targetSdk = 35
+        // 🔴 targetSdk 36 = Android 16 — **إلزامي قبل 31 أغسطس 2026**.
+        // تحذير Play Console: «اعتبارًا من 31 أغسطس 2026، إذا كان تطبيقك لا يستهدِف مستوى
+        // واجهة برمجة تطبيقات تم إطلاقه خلال عام واحد من أحدث إصدار، لن تتمكّن من تحديث
+        // تطبيقك». كان 35 حتى 2026-08-12. لا يُخفَّض مجدداً.
+        targetSdk = 36
         // 🔴 المنشور على Play: versionCode 31 / versionName "2.8" (نُشر 2026-07-17 07:40).
-        // صُولِح هنا 2026-08-11: كان المستودع على 30/"2.7" — أي أن vc31 بُني ونُشر دون أن
+        // صُولِح 2026-08-11: كان المستودع على 30/"2.7" — أي أن vc31 بُني ونُشر دون أن
         // يُسجَّل رفع الرقم في git، فمن يقرأ هذا السطر يستنتج المنشور خطأً بإصدار واحد.
         // الحزم محفوظة في Workspace\Releases\SchoolAppyemen\ (فيه README يحدّد الحيّة).
-        // ⇒ أي إصدار قادم يبدأ من 32 فأعلى؛ Play يرفض إعادة استخدام 31 ولو لم يعرفه
-        //   المستودع، وخطؤه («رمز الإصدار مستخدَم») يبدو غامضاً بلا هذا التعليق.
-        versionCode = 31
-        versionName = "2.8"
+        // ⇒ Play يرفض إعادة استخدام 31 ولو لم يعرفه المستودع، وخطؤه («رمز الإصدار
+        //   مستخدَم») يبدو غامضاً بلا هذا التعليق. الإصدار الذي يليه يبدأ من 33.
+        versionCode = 32
+        versionName = "2.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
@@ -111,6 +115,9 @@ dependencies {
     implementation(libs.androidx.swiperefreshlayout)
 
     // ── Support ───────────────────────────────────────────────────────────
+    // 🔒 لا `androidx.biometric` ولا `security-crypto` هنا عمداً: البصمة تعمل عبر
+    //    WebAuthn داخل الصفحة نفسها (‏`androidx.webkit` أدناه يفعّلها) — راجع التعليق
+    //    في `SchoolJsBridge`. إضافة مكتبة بصمة أصلية تعني نظاماً ثانياً مكرَّراً أضعف.
     implementation(libs.androidx.multidex)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.activity.ktx)

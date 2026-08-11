@@ -1,9 +1,31 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SchoolAppyemen</string><string name="school_full_name">مدارس الإبداع والتميز الدولية</string><string name="btn_teacher_text">منصة المعلمين والإدارة</string>
+    <string name="app_name">مدارس الإبداع والتميز</string>
+    <string name="btn_teacher_text">منصة المعلمين والإدارة</string>
     <string name="btn_student_text">منصة الطلاب وأولياء الأمور</string>
     <string name="school_logo_desc">شعار مدارس الإبداع والتميز</string>
-    <string name="fcm_default_channel_id">school_notifications</string>
-    <string name="fcm_default_channel_name">إشعارات المدرسة</string>
+
+    <!--
+        🔴 معرّف قناة الإشعارات — **الإصدار الثاني** (vc32، 2026-08-12).
+
+        لماذا معرّف جديد بدل تعديل القديم: صوت قناة الإشعارات على أندرويد 8+ **يُثبَّت
+        لحظة إنشائها ولا يقبل التعديل بعدها إطلاقاً**. والقناة القديمة
+        (`school_notifications`) أُنشئت بعنوان صوت مبنيّ على **معرّف مورد رقمي**
+        (`R.raw.notify_chime`)، والمشروع يبني بـ`android.nonFinalResIds=true` ⇒ الرقم
+        يتغيّر بين الإصدارات، فقناة مستخدم قديم قد تشير إلى مورد غير موجود ويصمت
+        الإشعار بلا أي أثر تشخيصي. القناة الجديدة تستخدم عنواناً **بالاسم**، وتُحذف
+        القديمة في `SchoolApplication`.
+
+        ⚠️ هذه القيمة يجب أن تطابق `PUSH_ANDROID_CHANNEL_ID` في
+        `school-app-yemen-gas :: teacher/PushNotify.js` — البثّ يرسلها في الحمولة.
+    -->
+    <string name="fcm_default_channel_id">school_news_v2</string>
+    <string name="fcm_legacy_channel_id">school_notifications</string>
+    <string name="fcm_default_channel_name">أخبار وإشعارات المدرسة</string>
     <string name="fcm_default_channel_desc">إشعارات الأخبار والتنبيهات من مدارس الإبداع والتميز الدولية</string>
+
+    <!--
+        🔒 لا نصوص بصمة هنا عمداً: واجهة «الدخول بالبصمة» كاملةً تعيش في صفحة الويب
+        (‏`teacher/_js-platform-reviews.html` · `student/Student Portal.html`) وتعمل على
+        WebAuthn. دور التطبيق تفعيلُها في الـWebView فقط — `WebViewSupport.enableWebAuthn`.
+    -->
 </resources>

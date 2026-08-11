@@ -25,7 +25,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.ContextCompat
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -53,8 +52,20 @@ class MainActivity : AppCompatActivity() {
     private var showingError = false
     private var pendingClearHistory = false
     private lateinit var netController: NetworkReloadController
+    private var updateChecker: UpdateChecker? = null
+    private var mandatoryDialogShown = false
 
     private val mainUrl: String get() = AppConfig.HOME_URL
+
+    /**
+     * الرابط المطلوب فعلياً لهذه الشاشة: ما حمله الـIntent (‏Deep Link · ضغطة إشعار ·
+     * تنقّل من منصّة أخرى) وإلّا الصفحة الرئيسية. يُتحقَّق منه أنه داخلي قبل تحميله —
+     * `EXTRA_TARGET_URL` يصل من `DeepLinkActivity` المُصدَّر، فلا يُوثَق به بلا فحص.
+     */
+    private val requestedUrl: String
+        get() = intent?.getStringExtra(AppConfig.EXTRA_TARGET_URL)
+            ?.takeIf { AppConfig.isInternalUrl(it) }
+            ?: mainUrl
 
     private val fileChooserLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -93,7 +104,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // 🔴 لا تُضِف `WindowCompat.setDecorFitsSystemWindows(window, false)` هنا:
+        //   `enableEdgeToEdge()` أعلاه يفعل ذلك بنفسه، والنداء الصريح **متوقّف نهائياً**
+        //   ورصده Play Console على vc31 بتحذيرَين («العرض حتى حافة الشاشة قد لا تكون
+        //   مفعّلة لدى جميع المستخدمين» + «واجهات متوقّفة نهائياً»). حُذف 2026-08-12.
 
         AppConfig.init(applicationContext)
         requestNotificationPermissionIfNeeded()
@@ -116,11 +130,12 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.getColor(this, R.color.progress_indicator_color)
         )
 
-        Log.d(TAG, "Loading HOME URL: $mainUrl")
+        val target = requestedUrl
+        Log.d(TAG, "Loading URL: $target")
         if (WebViewSupport.isOnline(this)) {
-            loadTarget(mainUrl)
+            loadTarget(target)
         } else {
-            lastFailedUrl = mainUrl
+            lastFailedUrl = target
             showError(sslError = false)
         }
 
@@ -170,11 +185,35 @@ class MainActivity : AppCompatActivity() {
      */
     private fun checkForUpdates() {
         val checker = UpdateChecker(this)
-        checker.cachedPlayUrlIfOutdated()?.let { showUpdateBanner(it) }
-        checker.checkIfNeeded { playUrl -> showUpdateBanner(playUrl) }
+        updateChecker = checker
+        checker.cachedUpdateInfo()?.let { showUpdate(it) }
+        checker.checkIfNeeded { info -> showUpdate(info) }
     }
 
-    private fun showUpdateBanner(playUrl: String) {
+    private fun showUpdate(info: UpdateChecker.UpdateInfo) {
+        if (info.mandatory) showMandatoryUpdateDialog(info) else showUpdateBanner(info)
+    }
+
+    /**
+     * تحديث إجباري: حوار غير قابل للإلغاء — الإصدار المثبَّت دون الحدّ الأدنى المدعوم.
+     * 🔴 لا يظهر إلا إذا ضبط المالك `ANDROID_MIN_SUPPORTED_VERSION_CODE_<pkg>` صراحةً؛
+     *    لا قيمة افتراضية تستطيع إقفال التطبيق على أحد بالخطأ.
+     */
+    private fun showMandatoryUpdateDialog(info: UpdateChecker.UpdateInfo) {
+        if (isFinishing || isDestroyed || mandatoryDialogShown) return
+        mandatoryDialogShown = true
+        AlertDialog.Builder(this)
+            .setTitle("تحديث مطلوب")
+            .setMessage(info.message)
+            .setCancelable(false)
+            .setPositiveButton("تحديث الآن") { _, _ ->
+                LinkRouter.openExternal(this, info.playUrl)
+            }
+            .show()
+    }
+
+    private fun showUpdateBanner(info: UpdateChecker.UpdateInfo) {
+        val playUrl = info.playUrl
         if (isFinishing || isDestroyed) return
         if (binding.mainContainer.findViewWithTag<View>(UPDATE_BANNER_TAG) != null) return
 
@@ -191,7 +230,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         val messageText = TextView(this).apply {
-            text = "تحديث جديد متاح — حدِّث التطبيق للاستفادة من آخر الإصلاحات"
+            // النصّ من الخادم — يتغيّر بلا إصدار جديد، وهذا شرط الوصول لمن لم يحدّث.
+            text = info.message
             setTextColor(Color.WHITE)
             textSize = 13f
             layoutParams =
@@ -204,7 +244,7 @@ class MainActivity : AppCompatActivity() {
             setTypeface(typeface, Typeface.BOLD)
             textSize = 13f
             setPadding(24, 0, 24, 0)
-            setOnClickListener { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(playUrl))) }
+            setOnClickListener { LinkRouter.openExternal(this@MainActivity, playUrl) }
         }
 
         val closeBtn = TextView(this).apply {
@@ -212,7 +252,12 @@ class MainActivity : AppCompatActivity() {
             setTextColor(Color.WHITE)
             textSize = 15f
             setPadding(16, 0, 8, 0)
-            setOnClickListener { binding.mainContainer.removeView(banner) }
+            // إخفاءٌ ليوم واحد لا للأبد — كان الإغلاق يمحو البانر لهذه الجلسة فقط بلا
+            // أثر، فيعود عند كل إقلاع؛ والآن يُحترَم الرفض مؤقّتاً ثم يُذكَّر المستخدم.
+            setOnClickListener {
+                updateChecker?.snooze()
+                binding.mainContainer.removeView(banner)
+            }
         }
 
         banner.addView(messageText)
@@ -285,19 +330,10 @@ class MainActivity : AppCompatActivity() {
                         // وقف التحميل فور معرفة الـ URL
                         transportWebView.stopLoading()
                         transportWebView.destroy()
-                        // توجيه نفس الـ URL كما لو كانت نقرة عادية
-                        when {
-                            AppConfig.isTeacherUrl(url) ->
-                                startActivity(Intent(this@MainActivity, TeacherActivity::class.java))
-                            AppConfig.isStudentUrl(url) ->
-                                startActivity(Intent(this@MainActivity, StudentActivity::class.java))
-                            url.startsWith("http") && !AppConfig.isHomeUrl(url) &&
-                                    !AppConfig.isCmsUrl(url) -> try {
-                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Cannot open: $url", e)
-                            }
-                        }
+                        // توجيه نفس الـ URL كما لو كانت نقرة عادية.
+                        // ‏`HOME` هنا يعني «نفس هذه الشاشة» فلا يفعل الموجّه شيئاً —
+                        // وهو الصحيح: النافذة المنبثقة أُلغيت للتوّ والصفحة قائمة.
+                        LinkRouter.handle(this@MainActivity, url, AppConfig.LinkTarget.HOME)
                     }
                 }
                 (resultMsg?.obj as? WebView.WebViewTransport)?.also { transport ->
@@ -314,25 +350,10 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
-                return when {
-                    AppConfig.isHomeUrl(url) -> false
-                    AppConfig.isTeacherUrl(url) -> {
-                        startActivity(Intent(this@MainActivity, TeacherActivity::class.java)); true
-                    }
-                    AppConfig.isStudentUrl(url) -> {
-                        startActivity(Intent(this@MainActivity, StudentActivity::class.java)); true
-                    }
-                    AppConfig.isCmsUrl(url) -> false
-                    WebViewSupport.isGoogleDomain(url) -> false
-                    else -> {
-                        try {
-                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Cannot open external URL: $url", e)
-                        }
-                        true
-                    }
-                }
+                return LinkRouter.handle(
+                    this@MainActivity, url, AppConfig.LinkTarget.HOME,
+                    isMainFrame = request.isForMainFrame
+                )
             }
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -343,7 +364,10 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 progressBar.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
-                if (url != null && url.startsWith("http")) showingError = false
+                if (url != null && url.startsWith("http")) {
+                    showingError = false
+                    WebViewSupport.injectFcmToken(view, this@MainActivity)
+                }
                 // بعد العودة من منصة المعلم/الطالب: امسح سجل التنقل بعد اكتمال
                 // تحميل الرئيسية → زر الرجوع يعرض dialog الخروج مباشرة (حالة نظيفة)
                 if (pendingClearHistory && url != null && url.startsWith("http")) {
@@ -437,9 +461,10 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        Log.d(TAG, "onNewIntent: reloading home for fresh state")
+        val target = requestedUrl
+        Log.d(TAG, "onNewIntent: loading $target")
         pendingClearHistory = true
-        loadTarget(mainUrl)
+        loadTarget(target)
     }
 
     override fun onResume() {

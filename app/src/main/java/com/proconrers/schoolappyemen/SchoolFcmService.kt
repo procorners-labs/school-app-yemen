@@ -11,12 +11,21 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
 /**
- * SchoolFcmService — يستقبل إشعارات Firebase Cloud Messaging ويعرضها عبر القناة
- * المُنشأة مسبقاً في [SchoolApplication] (صوت مخصص + أهمية عالية).
+ * SchoolFcmService — يستقبل إشعارات Firebase Cloud Messaging ويعرضها على القناة المُنشأة
+ * في [SchoolApplication] (صوت مخصّص + أهمية عالية)، ويفتح الخبر المقصود عند الضغط.
  *
- * ملاحظة نطاق: تسجيل التوكن على خادم GAS (لإرسال إشعارات مستهدَفة لاحقاً) يحتاج نقطة
- * API جديدة غير موجودة حالياً في `school-app-yemen-gas` — خارج نطاق هذه الجلسة عمداً.
- * التوكن يُحفَظ محلياً فقط (SharedPreferences) حتى تُضاف تلك النقطة مستقبلاً.
+ * ── كيف يصل الرمز إلى الخادم (vc32) ───────────────────────────────────────────
+ * الرمز يُحفَظ هنا محلياً فقط، ثم **يرفعه الويب** بعد تسجيل الدخول عبر
+ * `window.registerFcmToken(token)` — لأن نقطة GAS (`registerDeviceTokenProtected`) محروسة
+ * بـ`withAuth`، فلا معنى لإرسالها قبل وجود جلسة. الجسر يقرأه بـ`AndroidApp.getFcmToken()`
+ * ويحقنه [BaseWebViewActivity]/[MainActivity] في `onPageFinished`.
+ * (‏كان هنا `TODO` يقول «نقطة GAS غير موجودة» — وهي موجودة منذ 2026-08-05.)
+ *
+ * ── لماذا نبني الإشعار بأنفسنا دائماً ────────────────────────────────────────
+ * 🔴 الخادم يرسل **رسائل `data` فقط** بلا كتلة `notification`. السبب: حمولة تحمل
+ * `notification` والتطبيقُ في الخلفية يعرضها **SDK بنفسه** على القناة المذكورة في
+ * الحمولة — فيتجاوز قناتنا وصوتنا المخصّص. أما حمولة `data` فتُوقظ [onMessageReceived]
+ * في الحالتين، فيبقى الصوت والسلوك تحت سيطرتنا. راجع `teacher/PushNotify.js`.
  */
 class SchoolFcmService : FirebaseMessagingService() {
 
@@ -24,7 +33,21 @@ class SchoolFcmService : FirebaseMessagingService() {
         private const val TAG = "SchoolFcmService"
         private const val PREFS_NAME = "fcm_prefs"
         private const val KEY_TOKEN = "fcm_token"
-        private var notificationIdCounter = 1000
+
+        /** يقرأه [SchoolJsBridge.getFcmToken] ليسلّمه للويب. */
+        fun savedToken(context: Context): String =
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_TOKEN, "") ?: ""
+
+        /**
+         * معرّف الإشعار: مشتقّ من معرّف الخبر كي **لا يتكرّر الخبر الواحد** لو أُعيد بثّه،
+         * ويظلّ خبران مختلفان إشعارين مستقلَّين.
+         * (‏العدّاد السابق كان `private var` في companion فيُصفَّر مع كل قتل للعملية ⇒
+         *  إشعارات تدهس بعضها بعد إعادة التشغيل.)
+         */
+        private fun notificationIdFor(newsId: String): Int =
+            if (newsId.isBlank()) (System.currentTimeMillis() and 0x7FFFFFFF).toInt()
+            else newsId.hashCode() and 0x7FFFFFFF
     }
 
     override fun onNewToken(token: String) {
@@ -34,26 +57,58 @@ class SchoolFcmService : FirebaseMessagingService() {
             .edit()
             .putString(KEY_TOKEN, token)
             .apply()
-        // TODO(مستقبلي): إرسال التوكن إلى نقطة GAS جديدة عند توفّرها لتفعيل استهداف الإشعارات.
+        // الرفع للخادم يتمّ من الويب بعد الدخول — راجع توثيق الصنف أعلاه.
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
+        val data = remoteMessage.data
         val title = remoteMessage.notification?.title
-            ?: remoteMessage.data["title"]
+            ?: data["title"]
             ?: getString(R.string.app_name)
         val body = remoteMessage.notification?.body
-            ?: remoteMessage.data["body"]
+            ?: data["body"]
             ?: return
 
-        showNotification(title, body)
+        showNotification(
+            title = title,
+            body = body,
+            newsId = data["newsId"].orEmpty(),
+            slug = data["slug"].orEmpty(),
+            schoolId = data["schoolId"].orEmpty()
+        )
     }
 
-    private fun showNotification(title: String, body: String) {
-        val channelId = getString(R.string.fcm_default_channel_id)
+    /**
+     * الرابط الذي يُفتح عند الضغط. يُفضَّل الـslug القصير، ويتراجع إلى صفحة المقال
+     * بالمعرّف — وهو **الشكل المطلق الوحيد الصالح**: الرابط النسبي على صفحة الـslug
+     * يُحلّ إلى `/newsarticle.html` وهو 404 حيّ (بند 123).
+     */
+    private fun targetUrlFor(newsId: String, slug: String, schoolId: String): String {
+        val origin = AppConfig.CANONICAL_ORIGIN
+        if (newsId.isBlank()) return AppConfig.HOME_URL
+        val s = slug.ifBlank { AppConfig.EBDAA_SLUG }
+        if (s.isNotBlank()) return "$origin/$s?news=$newsId"
+        val sid = schoolId.ifBlank { AppConfig.EBDAA_SCHOOL_ID }
+        return "$origin/home/newsarticle.html?news=$newsId&school=$sid"
+    }
 
-        val intent = Intent(this, MainActivity::class.java).apply {
+    private fun showNotification(
+        title: String,
+        body: String,
+        newsId: String,
+        slug: String,
+        schoolId: String
+    ) {
+        val channelId = getString(R.string.fcm_default_channel_id)
+        val targetUrl = targetUrlFor(newsId, slug, schoolId)
+
+        // نمرّ عبر DeepLinkActivity لا MainActivity مباشرةً: هي الموضع الوحيد الذي
+        // يقرّر الشاشة من الرابط، فيبقى قرار التوجيه في مكان واحد (LinkRouter/AppConfig).
+        val intent = Intent(this, DeepLinkActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            data = android.net.Uri.parse(targetUrl)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -61,7 +116,10 @@ class SchoolFcmService : FirebaseMessagingService() {
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, pendingIntentFlags)
+        val notifId = notificationIdFor(newsId)
+        // ‏requestCode فريد لكل خبر — بدونه يُعيد النظام استخدام نفس PendingIntent
+        // فيفتح كل إشعار خبرَ أوّلِ إشعار (FLAG_UPDATE_CURRENT يحدّث الإضافات لا الـdata).
+        val pendingIntent = PendingIntent.getActivity(this, notifId, intent, pendingIntentFlags)
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_notification)
@@ -71,6 +129,8 @@ class SchoolFcmService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .build()
 
         val manager = NotificationManagerCompat.from(this)
@@ -79,7 +139,7 @@ class SchoolFcmService : FirebaseMessagingService() {
                 this, android.Manifest.permission.POST_NOTIFICATIONS
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
-            manager.notify(notificationIdCounter++, notification)
+            manager.notify(notifId, notification)
         } else {
             Log.w(TAG, "POST_NOTIFICATIONS not granted — notification suppressed")
         }
