@@ -6,15 +6,6 @@
 
 ---
 
-## دور Claude هنا
-
-- تحليل الأكواد وتصحيح الأخطاء.
-- توثيق التدفقات بين الأنظمة.
-- توجيه إعدادات GCP و GitHub.
-- التأكد من التوافق مع ES5 عند لمس أي جسر JS داخل الـWebView.
-
----
-
 ## نوع المحتوى (كلاهما، رغم أن GitHub يصنّف اللغة "PowerShell")
 
 مشروع Android/Kotlin/Gradle حقيقي + سكربتات PowerShell للنشر إلى Google Play — السكربتات هي ما
@@ -54,6 +45,16 @@ https://school-teacher-proxy.procorners-shop.workers.dev/{home,teacher,student,c
 
 `MASTER_URL` (`KEY_MASTER`) لا يزال يشير إلى رابط Apps Script `/exec` مباشرة (لا عبر الـWorker) —
 منفصل عن مسار المزامنة المعطَّل أعلاه.
+
+---
+
+## استخدام جسر الذكاء الاصطناعي في هذا المستودع
+
+يوجد على هذا الجهاز جسر محلي متعدد النماذج (Claude Code + OpenAI Codex CLI + OpenClaw) — راجع
+`C:\Users\osama\CLAUDE.md` → "AI Tooling Available in This Environment". إن استُخدم هنا (مهارة
+`codex-bridge` أو `/ask-both`): لا يُستخدَم أبداً لتفعيل المزامنة الديناميكية المعطَّلة عمداً أعلاه
+دون طلب صريح، ولا لتعديل `AppConfig.kt` تلقائياً دون مراجعتك — هذا الملف هو مصدر الحقيقة الوحيد
+لروابط الإنتاج، وأي خطأ فيه ينعكس على تطبيق منشور فعلياً.
 
 ---
 

@@ -180,7 +180,7 @@ Title "6. Recommendation"
 Write-Host ""
 
 # Check if schoolapp.jks exists (the original)
-$origKs = "C:\Users\osama\schoolapp.jks"
+$origKs = "C:\Users\osama\Workspace\Secure\schoolapp.jks"
 if (Test-Path $origKs) {
     $origR = & $KEYTOOL -list -v -keystore $origKs -storepass "123456" 2>&1 | Out-String
     if ($origR -match "SHA256: +([A-F0-9:]+)") {

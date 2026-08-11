@@ -6,7 +6,7 @@ $jarsigner = Join-Path $jbr 'jarsigner.exe'
 
 Write-Host ''
 Write-Host '=== Keystore Info ===' -ForegroundColor Cyan
-$ksFile = 'C:\Users\osama\schoolapp.jks'
+$ksFile = 'C:\Users\osama\Workspace\Secure\schoolapp.jks'
 if (Test-Path $ksFile) {
     & $keytool -list -keystore $ksFile -storepass 123456 -v 2>&1 |
         Select-String 'Alias name|Owner|Serial|Valid from|SHA256'

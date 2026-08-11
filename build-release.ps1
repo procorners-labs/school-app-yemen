@@ -30,7 +30,7 @@ $ksFile = Join-Path $projectDir 'keystore.properties'
 if (-not (Test-Path $ksFile)) {
     Write-Host 'ERROR: keystore.properties not found!' -ForegroundColor Red
     Write-Host 'Create it with:' -ForegroundColor Yellow
-    Write-Host '  storeFile=C:/Users/osama/schoolapp.jks' -ForegroundColor Gray
+    Write-Host '  storeFile=C:/Users/osama/Workspace/Secure/schoolapp.jks' -ForegroundColor Gray
     Write-Host '  storePassword=123456' -ForegroundColor Gray
     Write-Host '  keyAlias=schoolapp' -ForegroundColor Gray
     Write-Host '  keyPassword=123456' -ForegroundColor Gray
