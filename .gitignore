@@ -19,7 +19,6 @@ service-account-key.json
 .externalNativeBuild
 .cxx
 local.properties
-a
 
 # ── مخرَجات البناء — لا تُلتزَم في مستودع عامّ (~4-5MB لكل حزمة) ──────────────
 # كان هنا سطران يستبعدان app-release.aab لكنهما مكتوبان بترميز UTF-16 (بايت
@@ -34,3 +33,6 @@ app/release/
 keystore.properties
 *.jks
 *.keystore
+
+# ── تقارير Claude المحلّية — خصائص جهاز لا مشروع، والمستودع عامّ ──────────────
+.claude/local-reports/
