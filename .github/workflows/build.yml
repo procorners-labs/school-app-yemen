@@ -1,0 +1,58 @@
+name: Build (debug)
+
+# لماذا هذا الملفّ موجود
+# ─────────────────────
+# قِيس 2026-08-29: هذا المستودع كان يحمل `claude.yml` **وحده** — ولا شيءَ يتحقّق أن
+# الكود يُبنى أصلاً. وهو تطبيقٌ **منشور** على Google Play، فأيّ كسرٍ لا يُكتشَف إلّا
+# على جهاز المطوّر أو عند محاولة إصدارٍ — وهو أغلى وقتٍ لاكتشافه.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  assemble-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          # 🔴 ‏21 وليس 17 — والفرقُ مقصود ويُشرح حتى لا يُصحَّح خطأً:
+          #   · `app/build.gradle.kts` يثبّت `VERSION_17` و`jvmTarget = "17"` — وهذا
+          #     **هدفُ البايت-كود**، لا نسخةُ الـJDK التي تُشغّل Gradle.
+          #   · وGradle الذي يعمل على جهاز المالك يعمل بـ**JDK 21.0.10** (الـjbr المرفق
+          #     مع Android Studio). فمواءمةُ CI معه تُغلق فجوة «يعمل محلّياً ويفشل هنا»،
+          #     وهي أكثرُ ما يُهدر من وقتٍ في تشخيص بناءٍ فاشل.
+          java-version: '21'
+
+      - name: Set up Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v6
+
+      # 🟢 `assembleDebug` عمداً ولا شيءَ سواه — والسبب أمنيّ لا أدائيّ:
+      #   · لا يحتاج keystore ولا أي سرّ توقيع ⇒ صفرُ مساسٍ بـWorkspace\Secure،
+      #     ولا يلزم إضافةُ أي سرٍّ جديد إلى GitHub Actions.
+      #   · و`build.gradle.kts` يحرس ذلك بنفسه: التوقيع مشروطٌ بـ
+      #     `if (keystoreFile.exists())`، فغيابُ keystore.properties على العدّاء
+      #     مسارٌ مدعومٌ لا عطل.
+      # 🔴 ولا يُضاف `assembleRelease` هنا لاحقاً بلا قرارٍ صريح: يستدعي حقن أسرار
+      #    التوقيع في CI، وهو قرارٌ أمنيّ منفصل لا ترقيةٌ تقنية.
+      - name: Assemble debug
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Report APK size
+        if: success()
+        run: |
+          set -euo pipefail
+          find app/build/outputs/apk/debug -name '*.apk' -printf '%f\t%s bytes\n' || true
