@@ -1,0 +1,93 @@
+name: Claude Auto Review
+
+# مراجعةٌ تلقائية بـ`claude[bot]` عند فتح PR — أُضيفت 2026-08-30.
+# قبلها كان هذا المستودع (تطبيقٌ **منشور** على Play بـ٦٦٣ تثبيتاً) بلا أي مراجعة آلية.
+#
+# 🔴 ولماذا `opened, ready_for_review` ولا `synchronize`:
+#    `synchronize` يُطلق مراجعةً عند **كل دفعةٍ** على الفرع ⇒ يعيد علّةَ الاستنزاف
+#    التي عُطِّل بسببها بوتُ Codex، بحصّة Claude بدل حصّة Codex.
+#    ⇒ مراجعةٌ واحدة عند الفتح، وأخرى عند الخروج من المسوّدة. وللمراجعة عند الطلب في
+#    أي لحظةٍ أخرى: علّق `@claude` (ملفّ `claude.yml`).
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '_docs/**'
+
+# إعادةُ فتحٍ أو خروجٌ من مسوّدة يُلغي المراجعة السابقة — هنا الإلغاء صحيح، بخلاف
+# `claude.yml` حيث الإلغاء يقطع إجابةً على سؤال المستخدم.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # لا مراجعةَ لمسوّدة — تُراجَع حين تُعلَن جاهزة.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # 🔴 `pull-requests: write` إلزاميّ — بـ`read` يعمل الإجراء ثمّ لا ينشر شيئاً
+    #    بلا أي رسالة خطأ (anthropics/claude-code-action#1562).
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Claude review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            راجع هذا الـPR بالعربية. فرعُ الـPR مسحوبٌ في دليل العمل الحالي.
+
+            اقرأ `.github/claude-context.md` أوّلاً — فيه ثوابتُ هذا المستودع وفئاتُ
+            علله المتكرّرة وما **ليس** عطلاً فيه.
+
+            🔴 وهذه الأربعة تُكرَّر هنا عمداً ولا يُكتفى بالملفّ — ملفٌّ قد يُحذف أو
+            يُنقل، ومطالبةٌ تعتمده وحده تصير جوفاء صامتة:
+            1. **`applicationId` و`namespace` لا يُعادان تسميةً أبداً**
+               (`com.proconrers.schoolappyemen`) — Firebase مسجَّلٌ عليهما، والمنشورُ
+               على Play يفقد تحديثاته. ولو بدا الاسمُ بقيّةً من تسميةٍ قديمة.
+            2. **مفتاحُ التوقيع لا يدخل المستودع** — لا `*.jks` ولا `keystore.properties`
+               ولا كلمةُ سرٍّ نصّاً صريحاً في أي سكربت.
+            3. **`AppConfig.kt` مصدرُ الحقيقة الوحيد لروابط الـWebView** — أيُّ رابطٍ
+               حرفيٌّ يُبنى خارجه انحرافٌ صامت.
+            4. **`versionCode` لا يتراجع ولا يُعاد استعماله** — Play يرفض، ورسالتُه غامضة.
+
+            ركّز على: أخطاءٍ حقيقية · ثغراتٍ أمنية · تسريبِ أسرار · انهيارٍ وقتَ التشغيل ·
+            وفشلٍ صامت. ولا تقترح إعادةَ تنسيقٍ ولا تفضيلاتٍ أسلوبية.
+
+            ⚠️ ومراجعتُك **ساكنة**: لا تنفّذ بناءً ولا اختباراً (‏`Bash` خارج أدواتك
+            المسموحة عمداً — قرارُ أمنٍ في CI لا تفصيلُ مراجعة). فلا تدّعِ أنك شغّلتَ
+            شيئاً، وقُل صراحةً حين يكون حكمُك مبنياً على القراءة وحدها.
+
+            استعمل `gh pr comment` للملاحظة العامّة، و
+            `mcp__github_inline_comment__create_inline_comment` (بـ`confirmed: true`)
+            للمواضع بعينها. انشر تعليقاتِ GitHub فقط — لا تُخرِج نصَّ المراجعة كرسالة.
+
+          # 🔴 `--allowedTools` بلا أي `Bash` تنفيذيّ عدا نداءات `gh pr` القرائية —
+          #    توسيعُه ليشمل `node`/`gradle` يمنح الإجراءَ تنفيذاً على كودِ فرعٍ لم
+          #    يُدمج بعد، وهو قرارُ أمنٍ في CI لم يُتَّخذ.
+          # 🟢 و`--model claude-sonnet-5`: مراجعةٌ ساكنة متكرّرة ⇒ كسرُ الكلفة بلا خسارةٍ
+          #    تُذكر. أمّا الاستدعاءُ الصريح بـ`@claude` فيبقى على النموذج الكامل.
+          claude_args: |
+            --model claude-sonnet-5
+            --max-turns 15
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
