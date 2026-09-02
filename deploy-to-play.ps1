@@ -295,6 +295,14 @@ OK "Edit committed successfully"
 STEP "Verifying upload..."
 Start-Sleep -Seconds 3
 
+# 🔴 أُعيدت كتابتُها 2026-09-02 بعد فشلٍ صامتٍ مُستنسَخ 2/2: طبع السكربتُ
+#   «Edit committed successfully» ثمّ «DEPLOY COMPLETE / Status: Published» وخرج بـ0،
+#   و**vc33 لم يكن على Play إطلاقاً** (قِيس بأداةٍ مستقلّة ثلاثَ مرّات). وعلّتان معاً:
+#   ① الوجهةُ كانت `/applications/{pkg}/tracks/{track}` — **ليست نقطةَ نهايةٍ صالحة**؛
+#      قراءةُ المسارات تلزمها جلسةُ تحرير ⇒ 404 دائماً، أي أن التحقّق **لم يجرِ قطّ**.
+#   ② و`catch` كان يبتلع ذلك بـWARN، والملخّصُ يطبع "Published" **بلا شرط** ⇒
+#      الحالةُ ليست النتيجة، و«رُفعت» ليست «وصلت».
+$verified = $false
 try {
     $newJwt   = New-GoogleJwt -email $keyJson.client_email -privateKeyPem $keyJson.private_key -scope $PLAY_SCOPE
     $newToken = (Invoke-RestMethod -Uri $TOKEN_URL -Method Post -ContentType "application/x-www-form-urlencoded" -Body @{
@@ -303,13 +311,33 @@ try {
     }).access_token
     $newAuth  = @{ Authorization = "Bearer $newToken" }
 
-    $verifyTrack = Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/tracks/$Track" -Headers $newAuth
-    $latestRel   = $verifyTrack.releases | Select-Object -First 1
-    if ($latestRel.versionCodes -contains $uploadedCode) {
-        OK "Verified on Play: versionCode $uploadedCode is live on [$Track]"
+    # جلسةُ قراءةٍ منفصلة — تُحذف في finally فلا تبقى معلّقةً تُربك رفعاً لاحقاً
+    $vEdit = $null
+    try {
+        $vEdit = (Invoke-RestMethod -Method Post -Uri "$API_BASE/applications/$PACKAGE_NAME/edits" `
+                    -Headers $newAuth -ContentType "application/json" -Body "{}").id
+        $verifyTrack = Invoke-RestMethod -Headers $newAuth `
+                        -Uri "$API_BASE/applications/$PACKAGE_NAME/edits/$vEdit/tracks/$Track"
+        $allCodes = @($verifyTrack.releases | ForEach-Object { $_.versionCodes }) | ForEach-Object { "$_" }
+        if ($allCodes -contains "$uploadedCode") {
+            OK "Verified on Play: versionCode $uploadedCode is live on [$Track]"
+            $verified = $true
+        } else {
+            ERR "NOT on Play: [$Track] carries [$($allCodes -join ',')] - expected $uploadedCode"
+        }
+    } finally {
+        if ($vEdit) { try { Invoke-RestMethod -Method Delete -Headers $newAuth `
+            -Uri "$API_BASE/applications/$PACKAGE_NAME/edits/$vEdit" | Out-Null } catch {} }
     }
 } catch {
-    WARN "Verification skipped: $($_.Exception.Message.Split("`n")[0])"
+    ERR "Verification FAILED to run: $($_.Exception.Message.Split("`n")[0])"
+}
+
+# 🔴 لا نجاحَ بلا تحقّق. الخروجُ غيرُ الصفريّ هو ما يمنع تكرار الفشل الصامت.
+if (-not $verified) {
+    ERR "Upload NOT confirmed on Play. Do not report success."
+    ERR "Diagnose before retrying; the version code may or may not be consumed."
+    exit 1
 }
 
 # Open Play Console
