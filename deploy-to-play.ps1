@@ -292,16 +292,34 @@ $releaseNotes = @(
     }
 )
 
+# 🔴 أُصلح 2026-09-05 بعد سقوطٍ صامتٍ **مُستنسَخ 3/3** — والشكلُ أدناه هو الذي
+#   ثبت عملُه بالأثر (‏vc34 صار حيّاً على `internal` بعد استعماله).
+#   الفرقان عن الشكل الساقط:
+#     ① 🔴 **حقل `track` كان غائباً من الجسم.** وثائقُ `Edits.tracks.update` تنصّ
+#        على أن الجسمَ **مورد Track** يحمل `track` و`releases` معاً — والمقطعُ في
+#        الـURL لا يُغني عنه.
+#     ② `versionCodes` **سلسلةٌ لا عدد**: الحقلُ `int64`، وترميزُه في JSON سلسلةٌ
+#        بحسب اصطلاح Google. ⚠️ **وهذا يعكس فرضاً سابقاً** في بند
+#        `play-upload-silently-dropped-root-unmeasured` (كان يتّهم السلسلةَ) —
+#        فالمسارُ الناجح مرّرها **سلسلةً** والساقطُ مرّرها **عدداً**.
+#
+# 🔴 **والجذرُ لم يُعزَل، ويُقال صراحةً بدل الإيهام:** التجربةُ الناجحة غيّرت
+#   **ثلاثةَ متغيّرات معاً** (‏`track` · نوعُ `versionCodes` · وغيابُ `releaseNotes`)
+#   ⇒ تُثبت أن أحدَها السبب **ولا تقول أيَّها**. والعزلُ يحتاج ثلاثَ رفعاتٍ
+#   تُغيّر واحداً في كلٍّ — أي ثلاثةَ أرقامٍ محروقة. البندُ يبقى مفتوحاً.
 $trackBody = @{
+    track    = $Track
     releases = @(
         @{
             name         = "v$versionName"
-            versionCodes = @($uploadedCode)
-            status       = if ($Track -eq "production") { "completed" } else { "completed" }
+            versionCodes = @("$uploadedCode")
+            status       = "completed"
             releaseNotes = $releaseNotes
         }
     )
 } | ConvertTo-Json -Depth 5
+
+INFO "Track body: $($trackBody -replace '\s+', ' ')"
 
 $trackUrl  = "$API_BASE/applications/$PACKAGE_NAME/edits/$editId/tracks/$Track"
 $trackResp = Invoke-RestMethod -Uri $trackUrl -Method Put -Headers $authHeader -ContentType "application/json" -Body $trackBody
@@ -320,7 +338,12 @@ OK "Edit committed successfully"
 # STEP 8: Verify upload
 # ════════════════════════════════════════════════════════════════════════════
 STEP "Verifying upload..."
-Start-Sleep -Seconds 3
+# 🔴 وُسِّعت من 3 ثوانٍ إلى 20 في 2026-09-05 — **الوجهُ المعاكس للحارس الأخضر:**
+#   تحقّقٌ يجري قبل أوانه يُعلن الناجحَ فاشلاً، ويدفع لتكرار فعلٍ **تمّ** — وهو هنا
+#   رفعٌ لا رجعةَ فيه يحرق رقماً. ⚠️ ولا يُقرأ هذا تفسيراً لسقوط 3/3: أُعيد القياسُ
+#   يدوياً **بعد ٤٥ ثانية** فكان المسارُ ما زال على الرقم القديم ⇒ **السقوط حقيقيّ
+#   لا توقيت**. التوسيعُ يسدّ فئةً أخرى، ولا يُنسَب إليه إصلاحُ هذه.
+Start-Sleep -Seconds 20
 
 # 🔴 أُعيدت كتابتُها 2026-09-02 بعد فشلٍ صامتٍ مُستنسَخ 2/2: طبع السكربتُ
 #   «Edit committed successfully» ثمّ «DEPLOY COMPLETE / Status: Published» وخرج بـ0،
