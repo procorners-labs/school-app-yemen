@@ -91,6 +91,20 @@
             - `noHistory` + `excludeFromRecents`: نشاط توجيه لحظي لا يظهر في «الأخيرة».
             - النطاقان الإرثيان (school.procorners.com · workers.dev) **لا يُضافان هنا
               عمداً**: نُسخ أندرويد قديمة تعتمدهما، وإدراجهما يخطف روابطها بلا داعٍ.
+
+            🔴 والمطالبةُ مُقيَّدةٌ بمسار المستأجر — أُضيف 2026-09-02 قبل شحن vc33:
+            هذا التطبيقُ يخدم **مدرسةً واحدة** (مدارس الإبداع · slug `abdaawatmuaz`) على
+            نطاقٍ **متعدّد المستأجرين**. ومطالبةٌ بالمضيف كلِّه كانت تعترض صفحةَ المنصّة
+            العامّة و**روابطَ كلّ مدرسةٍ أخرى** — أي يفتح تطبيقُ مدرسةٍ رابطَ مدرسةٍ غيرها.
+
+            🔴 وقيدٌ تقنيّ يفسّر لماذا الـslug وحده: `pathPrefix` يطابق **المسار فقط ولا
+            يرى الاستعلام**. فالأشكالُ التي تحمل هويّة المستأجر في `?school=<uuid>`
+            (‏`/portal?school=…` · `/home/news.html?news=…&school=…`) **يستحيل
+            تقييدُها بالمسار**، وإدراجُها يعني المطالبةَ بذلك المسار **لكلّ المستأجرين**.
+            ⇒ أُسقطت، وتلك الروابطُ تفتح في المتصفّح.
+
+            🟢 ولا يفقد أحدٌ شيئاً بهذا التضييق: المنشورُ `vc31` **بلا أيّ Deep Link
+            إطلاقاً**، فأيُّ مجموعةٍ تُشحن زيادةٌ صافية لا انتقاص.
         -->
         <activity
             android:name=".DeepLinkActivity"
@@ -104,6 +118,53 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="yemenschoolz.com" />
                 <data android:scheme="https" android:host="www.yemenschoolz.com" />
+                <!--
+                    ‏المساراتُ مشتقّةٌ من عقد الوركر المقيس، لا من تخمين:
+                      · `_schoolSlugFromPath` ⇒ `/^\/([a-z0-9-]+)\/?$/` بعد استبعاد
+                        `_RESERVED_TOP_PATHS` ⇒ صفحةُ المدرسة **مقطعٌ واحدٌ فقط**،
+                        فلا شيءَ تحتها ⇒ لا `pathPrefix`.
+                      · `_DEEP_PORTAL_RE` ⇒ `/^\/(teacher|student)\/[a-z0-9-]+(?:\/[a-z0-9-]+)?\/?$/i`
+
+                    🔴 **والـslug لاحقةٌ لا بادئة:** الصيغةُ `/teacher/<page>/<slug>` —
+                    **لا** `/<slug>/teacher/`. ولذلك يلزم `pathPattern` (يطابق المسارَ
+                    كاملاً) لا `pathPrefix` (يطابق من البداية فقط).
+
+                    ‏`path` التامّة تلتقط `?news=…` معها — الاستعلامُ ليس جزءاً من المسار.
+
+                    ⚠️ **وتدقيقٌ مقيسٌ 2026-09-05 يصحّح ما قد يُفهَم من `_DEEP_PORTAL_RE`
+                    وحده:** الشكلُ ذو **المقطعين** `/teacher/<x>` يطابق ذلك التعبير فيُخدَم
+                    ‏`/teacher/index.html`، **لكنّ `<x>` فيه يُقرأ تبويباً لا مدرسةً** —
+                    مستخرِجُ هويّة المستأجر `_tenantKeyFrom` يشترط **ثلاثة مقاطع** ويأخذ
+                    **الأخير** (‏`school-app-proxy.js:525` ⇒ `deep[2]`)، وله ضابطٌ معاكسٌ
+                    صريح: `test-routes.js:496` ⇒ `['/teacher/login', '', '', 'مقطعٌ واحد =
+                    تبويبٌ لا مدرسة ⇒ لا مفتاح']`.
+                    ⇒ مُدخَلا `/teacher/abdaawatmuaz` و`/student/abdaawatmuaz` أدناه
+                    **دفاعيّان لشكلٍ يدويٍّ محتمَل، لا روابطُ مستأجرٍ يولّدها النظام**.
+                    وتُركا لأن ضررَهما صفر: لا يطالبان بمستأجرٍ آخر، والاسمُ بلا معنى
+                    تبويباً. **ولا يُستدلَّ بهما على أن الشكلَ ذا المقطعين يحمل هويّة.**
+
+                    ⚠️ **ودقّةٌ ثانية تُقال وإلّا صار «مشتقٌّ من العقد» ادّعاءً أوسعَ من
+                    حقيقته:** في لغة أنماط أندرويد (`PATTERN_SIMPLE_GLOB`) النقطةُ تطابق
+                    **أيَّ محرف بما فيه `/`** ⇒ `pathPattern="/teacher/.*/abdaawatmuaz"`
+                    يقبل أيضاً `/teacher/a/b/abdaawatmuaz` — أوسعُ من العقد المقيس
+                    (مقطعان كحدٍّ أقصى بعد المنصّة).
+                    🟢 **ولا أثرَ ضارّاً لهذا الاتّساع، مقيساً لا مُفترَضاً:** الوركر
+                    **لا يخدم أربعةَ مقاطع أصلاً** — `school-app-proxy.js:431` نصّاً:
+                    «ومقطعان كحدٍّ أقصى: `/teacher/a/b/c` لا يُطابِق». ⇒ المسارُ الزائد
+                    **لا يخصّ مستأجراً آخر**، وغايةُ ما يقع أن يُفتح داخل التطبيق مسارٌ
+                    لا يخدمه الخادم. وضبطُه حرفياً يستلزم أنماطاً بلا `.` وهي غير متاحة
+                    في هذه اللغة.
+                -->
+                <data android:path="/abdaawatmuaz" />
+                <data android:path="/abdaawatmuaz/" />
+                <data android:path="/teacher/abdaawatmuaz" />
+                <data android:path="/teacher/abdaawatmuaz/" />
+                <data android:path="/student/abdaawatmuaz" />
+                <data android:path="/student/abdaawatmuaz/" />
+                <data android:pathPattern="/teacher/.*/abdaawatmuaz" />
+                <data android:pathPattern="/teacher/.*/abdaawatmuaz/" />
+                <data android:pathPattern="/student/.*/abdaawatmuaz" />
+                <data android:pathPattern="/student/.*/abdaawatmuaz/" />
             </intent-filter>
         </activity>
 
