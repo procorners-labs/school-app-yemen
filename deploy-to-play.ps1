@@ -3,15 +3,27 @@
     SchoolApp Yemen - Google Play Auto-Deploy
     Discovers app state, uploads AAB, assigns track.
 .USAGE
-    .\deploy-to-play.ps1
+    .\deploy-to-play.ps1                              # بناءٌ مرفوعٌ إلى internal
     .\deploy-to-play.ps1 -Track internal
-    .\deploy-to-play.ps1 -Track production
+    .\deploy-to-play.ps1 -Promote -Track production   # ترقيةُ حزمةٍ مرفوعةٍ سلفاً
 #>
 
 param(
     [ValidateSet("internal","alpha","beta","production")]
     [string]$Track = "internal",    # Start safe with internal
-    [switch]$DryRun                 # Preview without uploading
+    [switch]$DryRun,                # Preview without uploading
+
+    # ── وضعُ الترقية — أُضيف 2026-09-06 ────────────────────────────────────────
+    # 🔴 **العلّةُ التي سدّه:** كان السكربتُ **يرفع الحزمةَ دائماً** (‏STEP 5 بلا شرط)
+    #   ولا يملك سبيلاً لتعيين حزمةٍ **مرفوعةٍ سلفاً** إلى مسارٍ آخر. وPlay يرفض رفعَ
+    #   نفس `versionCode` مرّتين ⇒ `-Track production` بعد رفعٍ ناجح إلى `internal`
+    #   **يصطدم حتماً** بـ«سبق أن تم استخدام رمز الإصدار». وقع فعلاً 2026-09-06.
+    # 🔴 **والفرقُ جوهريٌّ لا اختصار:** الترقيةُ **لا تستهلك رقماً ولا تحتاج ملفّاً**،
+    #   وإعادةُ البناء لأجلها تحرق رقماً بلا مقابل وتُنتج أثراً **غير الذي اختُبر**.
+    [switch]$Promote,
+    # الرقمُ المراد ترقيتُه. صفرٌ ⇒ يُشتقّ من **أعلى رقمٍ مرفوعٍ على Play**، لا من
+    # `build.gradle.kts`: الشجرةُ ليست شاهداً على ما عند Play (قاعدةُ الأثر المبنيّ).
+    [int]$VersionCode = 0
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -43,6 +55,7 @@ Banner "   SchoolApp Yemen - Google Play Auto-Deploy"
 Banner "======================================================"
 Banner "   Package : $PACKAGE_NAME"
 Banner "   Track   : $Track$(if($DryRun){' [DRY RUN]'})"
+Banner "   Mode    : $(if($Promote){'PROMOTE (no upload, no new versionCode)'}else{'UPLOAD'})"
 Banner ""
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -106,7 +119,15 @@ OK "Service account: $($keyJson.client_email)"
 # ════════════════════════════════════════════════════════════════════════════
 STEP "Checking AAB..."
 
-if (-not (Test-Path $AAB_PATH)) {
+# 🔴 في وضع الترقية **لا يُلمَس الملفُّ إطلاقاً** — لا وجودُه ولا توقيعُه ولا بناؤه.
+#   الحزمةُ المعنيّة **عند Play سلفاً**، والملفُّ المحلّي قد يكون بناءً أحدثَ أو مدهوساً
+#   بـ`clean` ⇒ فحصُه هنا يقيس أثراً **غير الذي يُرقَّى**، وقد يُطلق بناءً لا لزوم له.
+if ($Promote) {
+    INFO "Promote mode: skipping AAB checks entirely (nothing is uploaded)"
+    $aabItem = $null
+    $aabMB   = 0
+}
+elseif (-not (Test-Path $AAB_PATH)) {
     WARN "AAB not found. Building now..."
     $env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"
     & .\gradlew.bat bundleRelease 2>&1 | Select-Object -Last 5
@@ -116,18 +137,20 @@ if (-not (Test-Path $AAB_PATH)) {
     }
 }
 
-$aabItem = Get-Item $AAB_PATH
-$aabMB   = [math]::Round($aabItem.Length / 1MB, 1)
-OK "AAB: $($aabItem.Name) ($aabMB MB)"
-OK "Path: $AAB_PATH"
+if (-not $Promote) {
+    $aabItem = Get-Item $AAB_PATH
+    $aabMB   = [math]::Round($aabItem.Length / 1MB, 1)
+    OK "AAB: $($aabItem.Name) ($aabMB MB)"
+    OK "Path: $AAB_PATH"
 
-# Verify signed
-$jsv = & "$env:JAVA_HOME\bin\jarsigner.exe" -verify $AAB_PATH 2>&1 | Out-String
-if ($jsv -match "unsigned") {
-    ERR "AAB is UNSIGNED. Run: .\build-and-test.ps1"
-    exit 1
+    # Verify signed
+    $jsv = & "$env:JAVA_HOME\bin\jarsigner.exe" -verify $AAB_PATH 2>&1 | Out-String
+    if ($jsv -match "unsigned") {
+        ERR "AAB is UNSIGNED. Run: .\build-and-test.ps1"
+        exit 1
+    }
+    OK "AAB is signed"
 }
-OK "AAB is signed"
 
 # ════════════════════════════════════════════════════════════════════════════
 # STEP 2: Authenticate with Google Play API (JWT -> OAuth2 token)
@@ -216,12 +239,13 @@ try {
 }
 
 # Get APKs/bundles info
+$playCodes = @()
 try {
     $bundlesResp = Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/edits/$editId/bundles" -Headers $authHeader
     if ($bundlesResp.bundles) {
-        $codes  = @($bundlesResp.bundles | ForEach-Object { [int]$_.versionCode }) | Sort-Object
-        $latest = ($codes | Select-Object -Last 1)
-        OK "Bundles on Play: $($codes -join ', ')"
+        $playCodes = @($bundlesResp.bundles | ForEach-Object { [int]$_.versionCode }) | Sort-Object
+        $latest = ($playCodes | Select-Object -Last 1)
+        OK "Bundles on Play: $($playCodes -join ', ')"
         # 🔴 القاعدة: التالي = آخرُ ما **رُفع** + 1، لا آخرُ ما **نُشر** + 1.
         #   Play يحجز أيَّ رقمٍ رُفع ولو بقي مسوّدةً للأبد.
         OK "Highest uploaded versionCode: $latest  =>  next free: $($latest + 1)"
@@ -232,12 +256,49 @@ try {
     WARN "Could not fetch bundles: $($_.Exception.Message.Split("`n")[0])"
 }
 
+# ════════════════════════════════════════════════════════════════════════════
+# وضعُ الترقية: تثبيتُ الرقم والتحقّقُ من وجوده **قبل** أيّ فعل
+# ════════════════════════════════════════════════════════════════════════════
+# أيُّ خروجٍ مبكّرٍ يترك مسوّدةً معلَّقة — والمسوّداتُ الشاردة هي بعينها ما شوّش
+# تشخيصَ حالة Play أمس. تُحذف قبل الخروج دائماً.
+function Discard-Edit {
+    try { Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/edits/$editId" -Method Delete -Headers $authHeader | Out-Null }
+    catch { WARN "Could not discard edit $editId" }
+}
+
+if ($Promote) {
+    if ($playCodes.Count -eq 0) {
+        ERR "Promote requires the list of bundles on Play, and it could not be read."
+        ERR "Refusing to guess a versionCode. Fix the discovery step first."
+        Discard-Edit; exit 1
+    }
+    if ($VersionCode -le 0) {
+        $VersionCode = ($playCodes | Select-Object -Last 1)
+        INFO "No -VersionCode given; using highest uploaded on Play: $VersionCode"
+    }
+    # 🔴 الرفضُ المبكّر بدل رسالةٍ غامضة من Play بعد أن يكون التحريرُ قد بدأ.
+    if ($playCodes -notcontains $VersionCode) {
+        ERR "versionCode $VersionCode is NOT among the bundles uploaded to Play."
+        ERR "Uploaded: $($playCodes -join ', ')"
+        ERR "Promotion assigns an EXISTING bundle to a track - it cannot create one."
+        Discard-Edit; exit 1
+    }
+    # ⚠️ تحذيرٌ لا حجب: الترقيةُ إلى نفس المسار الذي يحمله الرقمُ أصلاً لا فائدة منها.
+    OK "Promoting existing versionCode $VersionCode  ->  [$Track]  (no upload)"
+}
+
 if ($DryRun) {
     Banner ""
-    Banner "  [DRY RUN] Would upload:"
-    Banner "  - File: $($aabItem.Name) ($aabMB MB)"
-    Banner "  - Track: $Track"
-    Banner "  - versionCode: (from AAB)"
+    if ($Promote) {
+        Banner "  [DRY RUN] Would PROMOTE (no file is uploaded):"
+        Banner "  - versionCode: $VersionCode  (already on Play)"
+        Banner "  - Track: $Track"
+    } else {
+        Banner "  [DRY RUN] Would upload:"
+        Banner "  - File: $($aabItem.Name) ($aabMB MB)"
+        Banner "  - Track: $Track"
+        Banner "  - versionCode: (from AAB)"
+    }
     Banner ""
     # لا تُترك مسوّدةٌ معلَّقة بعد معاينةٍ لم ترفع شيئاً.
     try {
@@ -253,6 +314,14 @@ if ($DryRun) {
 # ════════════════════════════════════════════════════════════════════════════
 # STEP 5: Upload AAB
 # ════════════════════════════════════════════════════════════════════════════
+if ($Promote) {
+
+STEP "Skipping upload (promote mode)"
+$uploadedCode = $VersionCode
+OK "Using versionCode already on Play: $uploadedCode"
+
+} else {
+
 STEP "Uploading AAB ($aabMB MB) to Google Play..."
 INFO "This may take 1-3 minutes..."
 
@@ -271,12 +340,17 @@ $uploadedCode = $uploadResp.versionCode
 OK "AAB uploaded successfully"
 OK "versionCode: $uploadedCode"
 
+}   # نهاية else — الرفع
+
 # ════════════════════════════════════════════════════════════════════════════
 # STEP 6: Assign to track
 # ════════════════════════════════════════════════════════════════════════════
 STEP "Assigning to track: $Track..."
 
 # Read versionName from build.gradle.kts
+# ⚠️ **حدٌّ يُقال في وضع الترقية:** هذا اسمُ **الشجرة الآن**، لا اسمُ الحزمة المُرقّاة.
+#   فإن تقدّمت الشجرةُ بعد الرفع صار الاسمُ المعروض على Play مخالفاً لما في الحزمة.
+#   يُترك كما هو لأنه اسمُ عرضٍ لا سلوك، **ويُنبَّه عليه** بدل تركه فخّاً صامتاً.
 $bk = Get-Content "$PROJ\app\build.gradle.kts" -Raw
 $versionName = "2.2"
 if ($bk -match 'versionName\s*=\s*"([\d\.]+)"') { $versionName = $Matches[1] }
@@ -403,14 +477,25 @@ Banner "======================================================"
 Banner "   App     : $PACKAGE_NAME"
 Banner "   Version : $versionName (code $uploadedCode)"
 Banner "   Track   : $Track"
-Banner "   Status  : Published"
+Banner "   Action  : $(if($Promote){'PROMOTED (existing bundle, no upload)'}else{'UPLOADED'})"
+Banner "   Status  : Verified live on this track"
 Banner ""
 
 if ($Track -eq "internal") {
-    Banner "  NEXT: Test internally, then promote to production:"
-    Banner "  Play Console -> Testing -> Internal testing -> Promote release"
+    Banner "  NEXT: Test on a real device, then promote to production:"
     Banner ""
-    Banner "  OR run: .\deploy-to-play.ps1 -Track production"
+    # 🔴 صُحّح 2026-09-06: كان يقول `-Track production` — وهو **يرفع الحزمةَ ثانيةً**
+    #   فيصطدم بـ«سبق أن تم استخدام رمز الإصدار». الترقيةُ تلزمها الراية `-Promote`.
+    Banner "  pwsh -File .\deploy-to-play.ps1 -Promote -Track production -DryRun"
+    Banner "  pwsh -File .\deploy-to-play.ps1 -Promote -Track production"
+    Banner ""
+    Banner "  OR: Play Console -> Testing -> Internal testing -> Promote release"
+}
+elseif ($Track -eq "production") {
+    Banner "  🔴 NEXT (otherwise half the release never lands):"
+    Banner "  Set ANDROID_LATEST_VERSION_CODE_$PACKAGE_NAME = $uploadedCode"
+    Banner "  in the 'teacher' Apps Script project properties."
+    Banner "  Without it nobody sees the update banner."
 }
 Banner "======================================================"
 Banner ""
