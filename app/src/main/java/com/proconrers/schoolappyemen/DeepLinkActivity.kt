@@ -15,9 +15,15 @@ import androidx.appcompat.app.AppCompatActivity
  *     المعلّم · الـslug و`?news=` ⇒ الواجهة العامّة)، فيلزم موضع يقرّر قبل الفتح.
  *   - `noHistory` + `Theme.NoDisplay`: لا يظهر ولا يبقى في «الأخيرة» ولا في زرّ الرجوع.
  *
- * أمثلة على ما صار يفتح داخل التطبيق بدل المتصفّح ابتداءً من vc32:
- *   `…/portal` · `…/portal?school=<uuid>` · `…/abdaawatmuaz` · `…/abdaawatmuaz?news=<id>`
- *   `…/home/newsarticle.html?news=<id>&school=<uuid>` · `…/teacher/index.html` · `…/pricing`
+ * 🔴 والمطالبةُ مُقيَّدةٌ بمسار المستأجر منذ vc34 — راجع `AndroidManifest.xml` للمبرّر
+ * الكامل. ما يفتح داخل التطبيق هو هذا وحده:
+ *   `…/abdaawatmuaz` · `…/abdaawatmuaz?news=<id>` (الاستعلامُ ليس جزءاً من المسار)
+ *   `…/teacher/<page>/abdaawatmuaz` · `…/student/<tab>/abdaawatmuaz`
+ *
+ * ⚠️ وما **لا** يفتح فيه — عمداً، لأنه ليس ملكَ هذه المدرسة أو يحمل هويّتَه في الاستعلام:
+ *   `…/` · `…/pricing` · `…/portal[?school=<uuid>]` · `…/teacher/index.html`
+ *   `…/home/news.html?news=<id>&school=<uuid>` · `…/<أيّ-مدرسةٍ-أخرى>`
+ * وكانت كلُّها مُطالَباً بها في vc32/vc33 (‏`intent-filter` بلا قيدِ مسار) ولم تُشحن قطّ.
  */
 class DeepLinkActivity : AppCompatActivity() {
 
