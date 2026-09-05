@@ -170,20 +170,44 @@ $authHeader  = @{ Authorization = "Bearer $accessToken" }
 OK "Authenticated successfully"
 
 # ════════════════════════════════════════════════════════════════════════════
-# STEP 3: Discover current app state
+# STEP 3: Create edit session
+# ════════════════════════════════════════════════════════════════════════════
+# 🔴 أُنشئت هنا لا بعد الاستكشاف — أُصلح 2026-09-05 بعد قياسٍ مباشر:
+#   كان الاستكشاف يضرب `applications/<pkg>/tracks` و`/bundles` **بلا مقطع
+#   `edits/<editId>`**، وواجهةُ Play توجبه ⇒ **404 دائماً وأبداً**، لا «أحياناً».
+#   والأخبثُ أن الرسالتين تدعوان لاستنتاجٍ خاطئ بثقة: «app may be new on Play»
+#   و«No bundles found yet (first upload)» — والتطبيقُ **منشورٌ بـ663 تثبيتاً**.
+#   ⇒ فحصُ ما قبل الرفع كان يكذب صامتاً، وهو الفحصُ الوحيد الذي يكشف
+#   أن `versionCode` محروقٌ سلفاً قبل عمليةٍ **لا رجعةَ فيها**.
+# 🟢 والتصحيحُ مجّانيّ: الجلسةُ كانت تُنشأ بعد أسطر على أي حال، فنُقلت لا أُضيفت.
+#   وفي `-DryRun` تُحذف صراحةً قبل الخروج فلا تتراكم مسوّداتٌ معلَّقة.
+STEP "Creating Play edit session..."
+
+$editResp = Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/edits" `
+    -Method Post -Headers $authHeader -ContentType "application/json" -Body "{}"
+$editId = $editResp.id
+OK "Edit session created: $editId (expires: $($editResp.expiryTimeSeconds)s)"
+
+# ════════════════════════════════════════════════════════════════════════════
+# STEP 4: Discover current app state
 # ════════════════════════════════════════════════════════════════════════════
 STEP "Discovering current app state on Google Play..."
 
 # Get current tracks
 try {
-    $tracksResp = Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/tracks" -Headers $authHeader
+    $tracksResp = Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/edits/$editId/tracks" -Headers $authHeader
     Banner ""
     Banner "  Current Release State:"
+    # 🔴 **كلُّ** الإصدارات لا أوّلُها — أُصلح 2026-09-05 في نفس المرور:
+    #   المسارُ الواحد يحمل عدّةَ إصدارات (مسوّدةٌ + مكتمِل)، و`Select-Object -First 1`
+    #   كان يعرض المسوّدةَ الفارغة ويُخفي المنشورَ الحيّ ⇒ `production` يبدو **فارغاً**
+    #   بينما عليه 663 تثبيتاً. وهذا **يعكس التشخيص** عند أيّ سؤالٍ عن الحالة الحيّة.
     foreach ($t in $tracksResp.tracks) {
-        $rel = $t.releases | Select-Object -First 1
-        if ($rel) {
-            $codes = ($rel.versionCodes -join ", ")
-            Banner ("  [{0,-12}] v{1} (codes: {2}) - {3}" -f $t.track, $rel.name, $codes, $rel.status)
+        if (-not $t.releases) { Banner ("  [{0,-12}] (لا إصدارات)" -f $t.track); continue }
+        foreach ($rel in $t.releases) {
+            $codes = if ($rel.versionCodes) { $rel.versionCodes -join ", " } else { "—" }
+            $nm    = if ($rel.name) { $rel.name } else { "(بلا اسم)" }
+            Banner ("  [{0,-12}] {1} (codes: {2}) - {3}" -f $t.track, $nm, $codes, $rel.status)
         }
     }
     Banner ""
@@ -193,13 +217,19 @@ try {
 
 # Get APKs/bundles info
 try {
-    $bundlesResp = Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/bundles" -Headers $authHeader
+    $bundlesResp = Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/edits/$editId/bundles" -Headers $authHeader
     if ($bundlesResp.bundles) {
-        $latest = $bundlesResp.bundles | Sort-Object versionCode -Descending | Select-Object -First 1
-        OK "Latest uploaded bundle: versionCode $($latest.versionCode)"
+        $codes  = @($bundlesResp.bundles | ForEach-Object { [int]$_.versionCode }) | Sort-Object
+        $latest = ($codes | Select-Object -Last 1)
+        OK "Bundles on Play: $($codes -join ', ')"
+        # 🔴 القاعدة: التالي = آخرُ ما **رُفع** + 1، لا آخرُ ما **نُشر** + 1.
+        #   Play يحجز أيَّ رقمٍ رُفع ولو بقي مسوّدةً للأبد.
+        OK "Highest uploaded versionCode: $latest  =>  next free: $($latest + 1)"
+    } else {
+        INFO "No bundles listed (app may genuinely be new on Play)"
     }
 } catch {
-    INFO "No bundles found yet (first upload)"
+    WARN "Could not fetch bundles: $($_.Exception.Message.Split("`n")[0])"
 }
 
 if ($DryRun) {
@@ -209,19 +239,16 @@ if ($DryRun) {
     Banner "  - Track: $Track"
     Banner "  - versionCode: (from AAB)"
     Banner ""
+    # لا تُترك مسوّدةٌ معلَّقة بعد معاينةٍ لم ترفع شيئاً.
+    try {
+        Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/edits/$editId" -Method Delete -Headers $authHeader | Out-Null
+        OK "Edit session discarded (dry run leaves no draft)"
+    } catch {
+        WARN "Could not discard edit $editId : $($_.Exception.Message.Split("`n")[0])"
+    }
     OK "Dry run complete. Run without -DryRun to actually upload."
     exit 0
 }
-
-# ════════════════════════════════════════════════════════════════════════════
-# STEP 4: Create edit session
-# ════════════════════════════════════════════════════════════════════════════
-STEP "Creating Play edit session..."
-
-$editResp = Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/edits" `
-    -Method Post -Headers $authHeader -ContentType "application/json" -Body "{}"
-$editId = $editResp.id
-OK "Edit session created: $editId (expires: $($editResp.expiryTimeSeconds)s)"
 
 # ════════════════════════════════════════════════════════════════════════════
 # STEP 5: Upload AAB
