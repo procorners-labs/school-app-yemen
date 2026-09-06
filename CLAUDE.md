@@ -449,7 +449,7 @@ grep -ral "school.procorners.com" /tmp/x   # ⇒ base/dex/classes.dex
 
 | الشيء | المكان |
 |---|---|
-| حزم الإصدار (13 حزمة، نُقلت من سطح المكتب) | `C:\Users\osama\Workspace\Releases\SchoolAppyemen\` + `README.md` |
+| حزم الإصدار (‏نُقلت من سطح المكتب 2026-08-11، **وتنمو مع كلّ إصدار**) | `C:\Users\osama\Workspace\Releases\SchoolAppyemen\` — **و`README.md` هناك هو مالكُ الحقيقة**: أيُّ حزمةٍ حيّةٌ وأيُّها محظورة |
 | مفتاح التوقيع | `C:\Users\osama\Workspace\Secure\schoolapp.jks` · alias `schoolapp` |
 | ملف كلمتَي سرّ المفتاح | `C:\Users\osama\Workspace\Secure\` — **نُقل من سطح المكتب 2026-08-11** |
 
