@@ -124,7 +124,6 @@ class MainActivity : AppCompatActivity() {
 
         buildViews()
         setupWebView()
-        checkForUpdates()
         netController = NetworkReloadController(this) { onNetworkAvailable() }
         swipeRefresh.setColorSchemeColors(
             ContextCompat.getColor(this, R.color.progress_indicator_color)
@@ -138,6 +137,18 @@ class MainActivity : AppCompatActivity() {
             lastFailedUrl = target
             showError(sslError = false)
         }
+
+        // 🟢 فحصُ التحديث خارجَ مسار الإقلاع الحرِج — نُقل من قبل `loadTarget` 2026-09-06.
+        //
+        // **العلّة المقيسة:** كان يُنادى في `onCreate` **قبل** بدء تحميل الصفحة، وهو
+        // يفتح ملفَّ تفضيلاتٍ ثالثاً (‏`UpdateChecker` يفتحه في مُهيِّئ حقله) ويقرأ ستّةَ
+        // مفاتيح متزامنةً على الخيط الرئيسي **قبل** أن يقرّر إطلاقَ خيطه الخلفيّ.
+        // ⇒ عملُ قرصٍ يسبق `loadUrl` في تطبيقٍ كلُّ قيمته أن تظهر الصفحة.
+        //
+        // 🟢 **و`post` بعد `loadTarget` لا يؤخّر شيئاً**: `loadUrl` غيرُ متزامنٍ أصلاً،
+        //    فالتحميلُ يكون قد انطلق. والبانرُ يظهر بعد ردّ الشبكة كما كان تماماً —
+        //    **صفرُ تغييرٍ في السلوك المرئيّ**، والفرقُ في الترتيب وحدَه.
+        window.decorView.post { checkForUpdates() }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {

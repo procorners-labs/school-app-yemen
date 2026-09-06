@@ -30,17 +30,34 @@
 
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
-    <!-- مؤشّر التحميل الأفقي — يعلو فوق الـ WebView في الأعلى -->
-    <com.google.android.material.progressindicator.LinearProgressIndicator
+    <!--
+      مؤشّر التحميل الأفقي — يعلو فوق الـ WebView في الأعلى.
+
+      🟢 **كان `LinearProgressIndicator` من مكتبة Material — بُدِّل 2026-09-06.**
+      وهو **المرجعُ الوحيد** للمكتبة في المستودع كلِّه (صفرُ استيرادٍ في أيّ ‎.kt‎)،
+      وثمنُه كان ٢٣٣ صنفاً مشحوناً بعد تضييق ‎-keep‎ — منها ٣٢ من `datepicker`
+      تُبقيها **قاعدةُ المكتبة المستهلَكة نفسُها** على `MaterialCalendarGridView`،
+      فلا تسقط بأيّ قاعدةٍ نكتبها نحن. وهي بعينُها مصدرُ تحذير Play عن الواجهات
+      المتوقّفة (`MaterialDatePicker.onStart` ⇒ `Window.setStatusBarColor`).
+
+      🟢 **والبديلُ نمطٌ قائمٌ في المستودع لا اختراعٌ جديد:** `MainActivity.kt:184`
+      يبني لنفس الغرض `ProgressBar(…, progressBarStyleHorizontal)` منذ البداية.
+      ⇒ البديلُ يُوحّد الشاشتين بدل أن يفرّق بينهما، ولا يمسّ أيَّ كود:
+      `binding.progressBar` تُستعمَل بـ`.progress` و`.visibility` وحدهما.
+
+      ⚠️ **وفرقٌ بصريٌّ يُقال لا يُطوى:** تختفي الحوافُّ المستديرة وحركةُ الظهور
+      والاختفاء المتدرّجة الخاصّتان بـMaterial. الارتفاعُ واللونُ كما هما.
+    -->
+    <ProgressBar
         android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="0dp"
         android:layout_height="3dp"
         android:visibility="gone"
         android:max="100"
         android:elevation="10dp"
-        app:indicatorColor="@color/progress_indicator_color"
-        app:trackColor="@android:color/transparent"
-        app:trackCornerRadius="0dp"
+        android:progressTint="@color/progress_indicator_color"
+        android:progressBackgroundTint="@android:color/transparent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />

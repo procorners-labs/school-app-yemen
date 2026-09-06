@@ -100,8 +100,25 @@ object AppConfig {
     val SCHEDULE_URL: String get() = read(KEY_SCHEDULE, DEFAULT_SCHEDULE)
     val MASTER_URL: String get() = read(KEY_MASTER, DEFAULT_MASTER)
 
+    /**
+     * ذاكرةٌ وسيطة للروابط — أُضيفت 2026-09-06.
+     *
+     * **العلّة المقيسة:** الروابط أعلاه خصائصُ `get()`، فكلُّ قراءةٍ منها كانت تضرب
+     * `prefs.getString` أي مخزنَ تفضيلاتٍ على القرص. وتُقرأ في كلّ `loadTarget`
+     * وكلّ `onNewIntent` وفي `startUrl` لشاشتَي المعلّم والطالب — على الخيط الرئيسي.
+     *
+     * 🔴 **والإبطالُ صريحٌ لا ضمنيّ:** تُمسَح في `parseAndStore` و`reset` — وهما
+     * الموضعان الوحيدان اللذان يكتبان في المخزن. فلو أُعيد تفعيلُ المزامنة يوماً
+     * (وهي معطّلةٌ اليوم) بقيت الذاكرةُ صادقة. **كاشٌ بلا إبطالٍ عند الكتابة هو
+     * بالضبط ما يُنتج «عدّلتُ ولم يتغيّر شيء».**
+     */
+    private val urlCache = HashMap<String, String>(6)
+
     private fun read(key: String, defaultValue: String): String {
-        return prefs?.getString(key, defaultValue) ?: defaultValue
+        urlCache[key]?.let { return it }
+        val value = prefs?.getString(key, defaultValue) ?: defaultValue
+        urlCache[key] = value
+        return value
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -268,6 +285,7 @@ object AppConfig {
             data.optString("schedule").takeIf { isValidUrl(it) }?.let { editor.putString(KEY_SCHEDULE, it) }
             data.optString("master").takeIf { isValidUrl(it) }?.let { editor.putString(KEY_MASTER, it) }
             editor.apply()
+            urlCache.clear()   // 🔴 إبطالٌ صريح — وإلّا بقيت الروابط القديمة حيّةً في الذاكرة
             true
         } catch (e: Exception) {
             Log.e(TAG, "Parse failed: ${e.message}")
@@ -288,5 +306,6 @@ object AppConfig {
 
     fun reset() {
         prefs?.edit()?.clear()?.apply()
+        urlCache.clear()   // 🔴 إبطالٌ صريح — انظر تعليق `urlCache`
     }
 }

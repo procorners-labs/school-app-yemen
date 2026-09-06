@@ -34,10 +34,33 @@ class SchoolFcmService : FirebaseMessagingService() {
         private const val PREFS_NAME = "fcm_prefs"
         private const val KEY_TOKEN = "fcm_token"
 
+        /**
+         * ذاكرةٌ وسيطة للرمز — أُضيفت 2026-09-06.
+         *
+         * **العلّة المقيسة:** [savedToken] تُنادى من موضعين ساخنين: [SchoolJsBridge.getFcmToken]
+         * (خيطُ Binder بطلبِ الصفحة)، و`WebViewSupport.injectFcmToken` **في كلّ
+         * `onPageFinished`** أي في كلّ صفحةٍ تُحمَّل، على الخيط الرئيسي. وكلُّ نداءٍ كان
+         * يفتح مخزنَ تفضيلاتٍ ويقرأ منه.
+         *
+         * 🔴 **و`@Volatile` ليست تزيّناً:** الكاتبُ [onNewToken] يعمل على خيطِ Firebase،
+         * والقارئان على الخيط الرئيسي وخيطِ Binder. **ثلاثةُ خيوطٍ على حقلٍ واحد.**
+         * 🔴 **والإبطالُ عند الكتابة إلزاميّ** — تجديدُ الرمز يقع فعلاً وبلا إشعار،
+         * ورمزٌ قديمٌ عالقٌ في الذاكرة يعني **إشعاراتٍ تذهب إلى العدم بصمت**، وهي
+         * بعينُها فئةُ العطل التي كلّفتنا عشرين يوماً من قبل.
+         */
+        @Volatile
+        private var cachedToken: String? = null
+
         /** يقرأه [SchoolJsBridge.getFcmToken] ليسلّمه للويب. */
-        fun savedToken(context: Context): String =
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        fun savedToken(context: Context): String {
+            cachedToken?.let { return it }
+            val token = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .getString(KEY_TOKEN, "") ?: ""
+            // 🔴 لا يُخزَّن الفارغ: الرمزُ يصل لاحقاً عبر [onNewToken]، وتخزينُ "" هنا
+            //    يُجمّد الغيابَ إلى الأبد داخل عمر العملية.
+            if (token.isNotBlank()) cachedToken = token
+            return token
+        }
 
         /**
          * معرّف الإشعار: مشتقّ من معرّف الخبر كي **لا يتكرّر الخبر الواحد** لو أُعيد بثّه،
@@ -53,6 +76,7 @@ class SchoolFcmService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         Log.d(TAG, "FCM token refreshed")
+        cachedToken = token   // 🔴 إبطالُ الذاكرة الوسيطة قبل الكتابة — انظر تعليق `cachedToken`
         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_TOKEN, token)
