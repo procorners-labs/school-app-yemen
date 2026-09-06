@@ -228,7 +228,16 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
             }
 
             override fun onConsoleMessage(m: ConsoleMessage): Boolean {
-                Log.d(logTag, "JS: ${m.message()} [${m.sourceId()}:${m.lineNumber()}]")
+                // 🔴 حارسُ `BuildConfig.DEBUG` — أُضيف 2026-09-06، وهو **أسخنُ موضعٍ في
+                //    التطبيق**: يُنفَّذ مرّةً لكلّ رسالةِ كونسول تصدرها الصفحة، على الخيط
+                //    الرئيسي. وصفحاتُنا مسهبةُ الكونسول فعلاً (رُصد على صفحة الخبر).
+                // ⚠️ **والقاعدةُ في `proguard-rules.pro` وحدَها لا تكفي**: `-assumenosideeffects`
+                //    تحذف نداءَ `Log.d` ولا تضمن حذفَ **بناءِ وسائطه** — وهنا الوسيطُ
+                //    تركيبُ سلسلةٍ من ثلاثة نداءاتٍ على `ConsoleMessage`. الحارسُ يمنع
+                //    البناءَ نفسَه. ⇒ الاثنان معاً لا أحدُهما.
+                if (BuildConfig.DEBUG) {
+                    Log.d(logTag, "JS: ${m.message()} [${m.sourceId()}:${m.lineNumber()}]")
+                }
                 return true
             }
         }

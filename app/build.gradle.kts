@@ -46,8 +46,12 @@ android {
         //   وهذه ثالثُ مرّةٍ يُطبَّق فيها «آخرُ ما رُفع + 1» — والقاعدةُ تصف العلاقة لا
         //   القيمة: يُقرأ الرقمُ من هنا بعد `git pull` ويُراجَع مقابل Play Console،
         //   ولا يُجمَّد رقمٌ مشتقٌّ في أيّ وثيقة فيصير إملاءً بائتاً.
-        versionCode = 34
-        versionName = "3.1"
+        //
+        // 🔴 و34 استُهلك كذلك (2026-09-05): رُفع إلى `internal` وهو حيٌّ هناك، ولم يصل
+        //   production بعد. ⇒ 35. **ورفعُه هنا لا يعني أنه بُني ولا رُفع** — يبقى
+        //   الأمرُ هو المصدر: `deploy-to-play.ps1 -Track internal -DryRun`.
+        versionCode = 35
+        versionName = "3.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
@@ -121,7 +125,16 @@ dependencies {
     implementation(libs.firebase.messaging)
 
     // ── UI ────────────────────────────────────────────────────────────────
-    implementation(libs.material)
+    // 🔴 `libs.material` أُزيلت 2026-09-06 — ولا تُعاد بلا حاجةٍ مقيسة.
+    //    **المقيس من خريطة vc34:** ١٬٠٩٢ صنفاً من المكتبة في الحزمة مقابل ٣٤ صنفاً
+    //    من كودنا، ومرجعٌ **واحد** في المستودع كلِّه (`LinearProgressIndicator` في
+    //    `activity_webview.xml`) وصفرُ استيرادٍ في أيّ ملفّ ‎.kt‎.
+    //    وثمنُها لم يكن الحجمَ وحدَه: `MaterialDatePicker` كانت تُشحن — في تطبيقٍ لا
+    //    يحوي كلمة `DatePicker` في أيّ سطرِ مصدر — وهي مصدرُ تحذير Play عن الواجهات
+    //    المتوقّفة نهائياً. وتضييقُ ‎-keep‎ وحدَه لم يُسقطها: قاعدةُ المكتبة المستهلَكة
+    //    تُبقي `MaterialCalendarGridView` فيتبعها الباقي، ولا تسقط بقاعدةٍ منّا.
+    // ⚠️ **والثيمُ لا يعتمد عليها**: أبوه `Theme.AppCompat.DayNight.NoActionBar`
+    //    (‏`res/values/themes.xml:8`) — لا `Theme.MaterialComponents` في المشروع.
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.swiperefreshlayout)
 
