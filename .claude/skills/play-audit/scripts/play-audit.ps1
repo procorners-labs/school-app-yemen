@@ -150,7 +150,7 @@ foreach ($r in $releases) {
 }
 Write-Host ""
 Write-Host "  ⚠️  status «$($statuses -join '/')» حالةُ **طلبٍ** لا توزيعٍ ولا نشاطِ مسار." -ForegroundColor Yellow
-Write-Host "     قِيس بالأثر 2026-09-07: أُوقف «alpha» من Console والحقلُ لم يتحرّك." -ForegroundColor DarkYellow
+Write-Host "     دليلُه تباينُ سطحين: لوحةُ «beta» تقول «لا إصدارات نشطة» والـAPI يقول completed." -ForegroundColor DarkYellow
 Write-Host "     ⇒ «الحيّ» يُقرأ من «نظرة عامة على النشر» وسجلِّ الإرسال وحدهما." -ForegroundColor DarkYellow
 Write-Host ""
 Write-Host ("  VERSIONS  tree: vc{0}/{1} targetSdk {2}   |   play next free: {3}" -f $treeCode, $treeName, $treeTarget, $nextFree) -ForegroundColor Cyan
