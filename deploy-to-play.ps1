@@ -37,7 +37,13 @@ param(
     #   `$trackBody` أدناه.
     # ⚠️ وأثرُها أن الإصدار يصل **بلا ملاحظات** — تُضاف من Play Console يدوياً،
     #   وهي حقلُ عرضٍ لا سلوك.
-    [switch]$NoReleaseNotes
+    [switch]$NoReleaseNotes,
+
+    # ── اسمُ الإصدار في وضع الترقية — مخرَجُ الطوارئ وحده ─────────────────────
+    # 🔴 **لا يُستعمل إلّا حين يعجز الاشتقاقُ من Play** (حزمةٌ مرفوعةٌ لم تُسنَد لأيّ
+    #   مسارٍ بعد، فلا إصدارَ يحمل اسمَها). والافتراضُ أن يبقى فارغاً: الاسمُ يُقرأ
+    #   من Play لا يُكتب بيد، لأن اليدَ هي التي أدخلت الخطأ أصلاً (انظر أدناه).
+    [string]$ReleaseName = ""
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -231,6 +237,9 @@ OK "Edit session created: $editId (expires: $($editResp.expiryTimeSeconds)s)"
 STEP "Discovering current app state on Google Play..."
 
 # Get current tracks
+# ⚠️ يُهيَّأ صراحةً قبل الـtry: وضعُ الترقية يقرؤه لاحقاً لاشتقاق اسم الإصدار،
+#   ومتغيّرٌ غيرُ معرَّفٍ يُقرأ `$null` صامتاً فيبدو «لا إصدارات» بدل «تعذّر القياس».
+$tracksResp = $null
 try {
     $tracksResp = Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/edits/$editId/tracks" -Headers $authHeader
     Banner ""
@@ -299,6 +308,59 @@ if ($Promote) {
     }
     # ⚠️ تحذيرٌ لا حجب: الترقيةُ إلى نفس المسار الذي يحمله الرقمُ أصلاً لا فائدة منها.
     OK "Promoting existing versionCode $VersionCode  ->  [$Track]  (no upload)"
+
+    # ────────────────────────────────────────────────────────────────────────
+    # 🔴 اسمُ الإصدار وملاحظاتُه في وضع الترقية يُشتقّان من **Play** لا من الشجرة
+    # ────────────────────────────────────────────────────────────────────────
+    # **العيبُ الذي أُصلح هنا، وقع مقيساً 2026-09-07:** كان `$versionName` يُقرأ من
+    # `build.gradle.kts` ويُستعمل في `name` **في الوضعين معاً**. فترقيةُ `vc34/3.1`
+    # أرسلت `"name": "v3.2"` وملاحظاتِ `vc35` — وصفٌ لإصدارٍ **لم يُرفع أصلاً**
+    # («الوضع الليلي» و«إشعارات فورية» موعودةٌ لحزمةٍ ليست هي).
+    # 🟢 ولم يقع الضرر **لأن الترقية سقطت لسببٍ آخر** — صدفةٌ لا ضابط.
+    #
+    # 🔴 **والقاعدةُ المشتقّة أعمُّ من الحادثة:** `-Promote` **لا يلمس ملفّاً**، فلا
+    #   يجوز أن يشتقّ وصفَه من شجرةٍ تقدّمت عن الحزمة. وهي فئةُ «الأثرُ المبنيُّ يشهد
+    #   على نفسه، والشجرةُ لا تشهد عليه» — المسجَّلة في `CLAUDE.md` §الإصدارات.
+    #
+    # **المصدرُ الصحيح:** الإصدارُ القائم على Play الذي **يحمل هذا الرقم** — وهو ما
+    # طبعته خطوةُ الاكتشاف أعلاه حرفياً (`[production] v3.1 (codes: 34)`).
+    # 🔴 **ولا هبوطَ صامتٌ إلى الشجرة عند العجز** — الهبوطُ هو العطلُ بعينه، لأنه
+    #   يُنتج وصفاً خاطئاً **بلا رسالةٍ واحدة**. يُرفض ويُسمَّى البديل.
+    $promoteName  = ""
+    $promoteNotes = $null
+    if ($ReleaseName) {
+        $promoteName = $ReleaseName
+        WARN "Release name taken from -ReleaseName (manual override): $promoteName"
+        WARN "Play was NOT consulted for this name. Verify it matches versionCode $VersionCode."
+    }
+    elseif ($null -eq $tracksResp) {
+        ERR "Promote needs the release name that Play already holds for versionCode $VersionCode,"
+        ERR "but the tracks listing could not be read (see the warning above)."
+        ERR "Refusing to fall back to build.gradle.kts - the tree describes a DIFFERENT build."
+        ERR "Fix discovery, or pass -ReleaseName explicitly if you know the correct name."
+        Discard-Edit; exit 1
+    }
+    else {
+        foreach ($t in $tracksResp.tracks) {
+            foreach ($rel in $t.releases) {
+                if ($rel.versionCodes -and (@($rel.versionCodes) -contains "$VersionCode")) {
+                    if ($rel.name)         { $promoteName  = $rel.name }
+                    if ($rel.releaseNotes) { $promoteNotes = $rel.releaseNotes }
+                    break
+                }
+            }
+            if ($promoteName) { break }
+        }
+        if (-not $promoteName) {
+            ERR "versionCode $VersionCode is uploaded to Play but is not assigned to ANY track,"
+            ERR "so Play holds no release name for it - and the tree's name belongs to a different build."
+            ERR "Pass -ReleaseName '<the name this bundle was built as>' to proceed deliberately."
+            Discard-Edit; exit 1
+        }
+        OK "Release name resolved FROM PLAY: $promoteName  (versionCode $VersionCode)"
+        if ($promoteNotes) { OK "Release notes carried over from Play (not from the tree)" }
+        else               { INFO "Play holds no release notes for this release; none will be sent" }
+    }
 }
 
 if ($DryRun) {
@@ -307,6 +369,10 @@ if ($DryRun) {
         Banner "  [DRY RUN] Would PROMOTE (no file is uploaded):"
         Banner "  - versionCode: $VersionCode  (already on Play)"
         Banner "  - Track: $Track"
+        # 🔴 يُطبع هنا عمداً: البروفةُ تخرج **قبل** بناء الجسم، فلولا هذا السطر لما
+        #   كان للإصلاح ضابطٌ يُقاس بلا فعلٍ حقيقيّ على Play.
+        Banner "  - Release name: $promoteName   (source: $(if($ReleaseName){'-ReleaseName (manual)'}else{'Play'}) - NOT build.gradle.kts)"
+        Banner "  - Release notes: $(if($NoReleaseNotes){'suppressed (-NoReleaseNotes)'}elseif($promoteNotes){'carried over from Play'}else{'none held by Play'})"
     } else {
         Banner "  [DRY RUN] Would upload:"
         Banner "  - File: $($aabItem.Name) ($aabMB MB)"
@@ -362,9 +428,10 @@ OK "versionCode: $uploadedCode"
 STEP "Assigning to track: $Track..."
 
 # Read versionName from build.gradle.kts
-# ⚠️ **حدٌّ يُقال في وضع الترقية:** هذا اسمُ **الشجرة الآن**، لا اسمُ الحزمة المُرقّاة.
-#   فإن تقدّمت الشجرةُ بعد الرفع صار الاسمُ المعروض على Play مخالفاً لما في الحزمة.
-#   يُترك كما هو لأنه اسمُ عرضٍ لا سلوك، **ويُنبَّه عليه** بدل تركه فخّاً صامتاً.
+# 🟢 **صحيحٌ في وضع الرفع وحده** — هناك تُبنى الحزمةُ من هذه الشجرة الآن، فالشجرةُ
+#   شاهدٌ عليها. 🔴 **وباطلٌ في وضع الترقية** — تلك حزمةٌ بُنيت في الماضي، واسمُها
+#   يُقرأ من Play في الكتلة أعلاه. (الحدُّ كان مكتوباً هنا تنبيهاً ثمّ صار مُنفَّذاً
+#   2026-09-07: «حدٌّ يُنبَّه عليه» يُنسى، و«حدٌّ يُفرَض» لا يُنسى.)
 $bk = Get-Content "$PROJ\app\build.gradle.kts" -Raw
 $versionName = "2.2"
 if ($bk -match 'versionName\s*=\s*"([\d\.]+)"') { $versionName = $Matches[1] }
@@ -404,20 +471,43 @@ $releaseNotes = @(
 #   مستقلّةٍ بعد ٦٠ث و٧٥ث. ⇒ **`releaseNotes` بريئة** — والفرضُ الذي بُنيت عليه هذه
 #   الراية **منقوضٌ لا مؤجَّل**.
 #
-# 🎯 **وما تبقّى بعد النقض متغيّرٌ واحدٌ لم يُفحَص: المسارُ نفسُه.** الشكلُ عينُه نجح
-#   على `internal` وسقط على `production` مرّتين ⇒ العلّةُ **خاصّةٌ بالمسار لا بالجسم**.
-#   والمرشّحان — ولا يُقاسان من الـAPI، بل من Play Console بيد المالك:
-#     · **النشرُ المُدار (Managed publishing)** — يلتزم التغييرَ ولا ينشره، ولا يسري
-#       على `internal` أصلاً، وهذا يطابق المقيسَ حرفياً.
-#     · **المسوّدةُ الفارغة** القائمة على `production` (‏`(بلا اسم) · codes: —`).
-#   🔴 **ولم يُجرَّب `beta` كضابطٍ فاصل** عمداً: مسارٌ حيٌّ له مختبرون، وتغييرُه فعلٌ
+# 🎯 **وعزلٌ مقيسٌ 2026-09-07 قلبَ التشخيصَ المكتوبَ هنا — يُصحَّح ولا يُحذف:**
+#   جُرّبت الترقيةُ على `alpha` (بروفةٌ ثمّ تنفيذٌ فعليّ) فسقطت صامتةً كما على
+#   `production`. ⇒ **الحدُّ الفاصل `internal` مقابل ما سواه، لا `production` وحده.**
+#
+#     | المسار      | الترقيةُ بالـAPI | العدد |
+#     |-------------|------------------|-------|
+#     | internal    | 🟢 نجحت          | ١/١   |
+#     | alpha       | 🔴 سقطت صامتةً   | ١/١   |
+#     | production  | 🔴 سقطت صامتةً   | ٢/٢   |
+#
+#   🔴 **ومرشَّحان كانا مكتوبَين هنا سقطا كلاهما:**
+#     · **المسوّدةُ الفارغة** — لا مسوّدةَ على `alpha`، وسقط سواءً.
+#     · **النشرُ المُدار** — طابق الجدولَ ٤/٤ فاتُّهم ساعةً، ثمّ **برئ بقياسٍ من سطحه
+#       الخاصّ**: «التغييرات الجاهزة للنشر» **فارغة**، وسجلُّ الإرسال يقف عند `#20`
+#       بلا طلبٍ لاحق. ⇒ لو التُزمت الترقيةُ وحُجبت لظهرت في أحد السطحين.
+#   ⇒ **`Edit committed successfully` كذبٌ محض**: التحريرُ لا يصل Play أصلاً، لا
+#     «يصل ويُحجَب عن النشر». ولا أثرَ للطلب في أيّ سطحٍ من سطوح Console.
+#
+# 🎯 **والمرشّحُ الباقي — يطابق الجدولَ ٤/٤ ويفسّر الصمتَ بدل أن يفترضه: أذونُ حساب
+#   الخدمة.** Play يفصل أذونَ الإصدار **ثلاثةً مستقلّة**: `internal testing` ·
+#   `testing tracks` · `production`. وحسابٌ يملك **الأوّلَ وحده** يُنتج المقيسَ حرفياً.
+#   ⚠️ **ولا يُقاس من `androidpublisher`** — بل من Play Console: المستخدمون والأذونات
+#      ← حسابُ الخدمة ← أذوناتُ التطبيق ← قسم «الإصدارات». البندُ مفتوحٌ حتى ذلك،
+#      **ومرشّحٌ قويٌّ ليس قياساً.**
+#   🔴 **ولم يُجرَّب `beta` كضابطٍ فاصل** عمداً: مسارٌ له مختبرون، وتغييرُه فعلٌ
 #      خارجيٌّ لم يأذن به المالك — والتشخيصُ لا يبرّر أثراً غيرَ مأذون.
 $release = @{
-    name         = "v$versionName"
+    # 🔴 المصدرُ يتبع الوضع: الترقيةُ من Play (الحزمةُ بُنيت في الماضي)، والرفعُ من
+    #   الشجرة (الحزمةُ تُبنى منها الآن). الخلطُ يصف إصداراً بوعودِ إصدارٍ آخر.
+    name         = if ($Promote) { $promoteName } else { "v$versionName" }
     versionCodes = @("$uploadedCode")
     status       = "completed"
 }
-if (-not $NoReleaseNotes) { $release.releaseNotes = $releaseNotes }
+if (-not $NoReleaseNotes) {
+    $release.releaseNotes = if ($Promote) { $promoteNotes } else { $releaseNotes }
+    if ($null -eq $release.releaseNotes) { $release.Remove("releaseNotes") }
+}
 $trackBody = @{
     track    = $Track
     releases = @($release)
