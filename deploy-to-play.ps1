@@ -170,6 +170,28 @@ if (-not $Promote) {
         exit 1
     }
     OK "AAB is signed"
+
+    # 🔴 **الرفضُ هنا لا عند بناء الجسم — والفرقُ أن الرقم يُحرق أو لا يُحرق.**
+    #   وُضع الفحصُ أوّلَ مرّة عند `$releaseNotes` (‏STEP 6) وهو **بعد الرفع** ⇒ كان
+    #   يرفض بعد استهلاك `versionCode` عند Play للأبد. حارسٌ يحمي بعد وقوع ما يحميه منه
+    #   ليس حارساً. ⇒ يُقاس من `build.gradle.kts` قبل لمسِ الشبكة.
+    if (-not $NoReleaseNotes) {
+        $bkEarly = Get-Content "$PROJ\app\build.gradle.kts" -Raw
+        if ($bkEarly -match 'versionCode\s*=\s*(\d+)') {
+            $pendingCode = $Matches[1]
+            $pendingNotes = Join-Path $PROJ "_docs\release-notes\vc$pendingCode.json"
+            if (-not (Test-Path $pendingNotes)) {
+                ERR "لا ملفَّ ملاحظاتٍ للإصدار vc$pendingCode :"
+                ERR "  _docs\release-notes\vc$pendingCode.json"
+                ERR "اكتبه قبل الرفع — ولا نصَّ افتراضيٌّ هنا عمداً: النصُّ العامُّ يُخفي أنك نسيتَ،"
+                ERR "وقد أُرسلت فعلاً وعودُ vc31 مع إصداراتٍ لاحقةٍ لا تحملها."
+                ERR 'الشكل: [ { "language": "ar", "text": "..." }, { "language": "en-US", "text": "..." } ]'
+                ERR "أو -NoReleaseNotes لرفعٍ بلا ملاحظاتٍ عن قصد."
+                exit 1
+            }
+            OK "ملاحظاتُ الإصدار حاضرةٌ: vc$pendingCode.json"
+        }
+    }
 }
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -436,16 +458,28 @@ $bk = Get-Content "$PROJ\app\build.gradle.kts" -Raw
 $versionName = "2.2"
 if ($bk -match 'versionName\s*=\s*"([\d\.]+)"') { $versionName = $Matches[1] }
 
-$releaseNotes = @(
-    @{
-        language = "ar"
-        text     = "v$versionName - تحديث يشمل: نطاق أسرع وأكثر موثوقية (يتفادى مشاكل الاتصال مع بعض مزوّدي الخدمة)، إشعارات فورية للأخبار المهمة، دعم الوضع الليلي، وتحسينات أمان وأداء عامة."
-    },
-    @{
-        language = "en-US"
-        text     = "v$versionName - Faster, more reliable connectivity (bypasses issues with some local ISPs), instant push notifications for important news, dark mode support, and general security/performance improvements."
+# ── ملاحظاتُ الإصدار: ملفٌّ لكلّ رقم، ولا نصَّ افتراضيٌّ إطلاقاً ──────────────
+# 🔴 **العلّةُ التي أُصلحت 2026-09-07 — وهي توأمُ عيبِ `-Promote`:** كان هنا نصٌّ
+#   **مجمَّدٌ** يَعِد بـ«نطاقٍ أسرع» و«إشعاراتٍ فورية» و«الوضع الليلي» — وتلك تغييراتُ
+#   `vc31`. ويُرسَل كما هو مع **أيّ** إصدارٍ لاحق، فيقرأ مستخدمُك وعوداً ليست له.
+#   ⚠️ والفارقُ عن `versionName` جوهريّ: ذاك تقرؤه الشجرةُ **من نفسها فيصدق**،
+#      وهذا **سلسلةٌ محفورةٌ لا تعرف أيَّ إصدارٍ تصف** ⇒ الشجرةُ ليست شاهداً عليها.
+# 🔴 **ولا هبوطَ إلى نصٍّ عامّ عند الغياب** — «تحسيناتٌ عامّة» تُخفي أنك نسيت الكتابة،
+#   وهي بالضبط الحالةُ التي أنتجت العطل. الغيابُ **يُوقف الرفع** ويُسمّى الملفُّ المطلوب.
+$notesFile    = Join-Path $PROJ "_docs\release-notes\vc$uploadedCode.json"
+$releaseNotes = $null
+if (-not $Promote -and -not $NoReleaseNotes) {
+    if (-not (Test-Path $notesFile)) {
+        ERR "لا ملفَّ ملاحظاتٍ لهذا الإصدار: _docs\release-notes\vc$uploadedCode.json"
+        ERR "اكتبه أوّلاً — ولا نصَّ افتراضيٌّ هنا عمداً: النصُّ العامُّ يُخفي أنك نسيتَ."
+        ERR 'الشكل:  [ { "language": "ar", "text": "..." }, { "language": "en-US", "text": "..." } ]'
+        ERR "أو مرّر -NoReleaseNotes لرفعٍ بلا ملاحظاتٍ عن قصد."
+        Discard-Edit; exit 1
     }
-)
+    $releaseNotes = @(Get-Content $notesFile -Raw -Encoding UTF8 | ConvertFrom-Json |
+                      ForEach-Object { @{ language = $_.language; text = $_.text } })
+    OK "ملاحظاتُ الإصدار من vc$uploadedCode.json ($($releaseNotes.Count) لغة)"
+}
 
 # 🔴 أُصلح 2026-09-05 بعد سقوطٍ صامتٍ **مُستنسَخ 3/3** — والشكلُ أدناه هو الذي
 #   ثبت عملُه بالأثر (‏vc34 صار حيّاً على `internal` بعد استعماله).
