@@ -113,29 +113,69 @@ jobs:
       #   🔴 PR #48 ⇒ يبدأ بـ`**Claude encountered an error` · و`reviews` **فارغة**.
       # ⚠️ وتفشل أيضاً حين **لا تعليقَ من `claude[bot]` أصلاً** — وهذا يغلق فئةَ
       #    «الإجراءُ يخضرّ وقد تخطّى التحقّق بلا نشرِ شيء».
+      # 🔴 **و`!cancelled()` لا `always()`** — `concurrency.cancel-in-progress: true` أعلاه
+      #    يُلغي التشغيلةَ عند كلّ دفعةٍ جديدة، و`always()` كان سيُحمِّر كلَّ إلغاءٍ مشروع.
       - name: Gate on a published review comment
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_ID: ${{ github.run_id }}
+          REVIEW_OUTCOME: ${{ steps.review.outcome }}
         run: |
-          set -euo pipefail
-          body=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-                   --paginate \
-                   --jq '[.[] | select(.user.login=="claude[bot]")] | last // {} | .body // ""')
+          # 🔴 **لا `-e` عمداً** — وهذا سدُّ فشلٍ صامتٍ **داخل علاجِ الفشل الصامت**:
+          #    تحت `set -e` يُنهي أيُّ أمرٍ يعود بغير صفرٍ السكربتَ **بلا رسالة** ⇒ بوّابةٌ
+          #    حمراءُ **بلا حكم**، وهي بعينها الفئةُ التي كُتبت البوّابةُ لإغلاقها.
+          set -uo pipefail
 
-          if [ -z "$body" ]; then
-            echo "::error::لا تعليقَ من claude[bot] على هذا الـPR — المراجعةُ لم تُنشَر أصلاً."
-            echo "review-published=false" >> "$GITHUB_STEP_SUMMARY"
+          # 🔴 مرساةُ `run_id`: جسمُ تعليق `claude[bot]` يحوي رابطَ تشغيلته حرفياً.
+          #    قِيس على PR #34: التعليقُ يحوي `actions/runs/33992517567` وهو رقمُ تشغيلته.
+          #    وبلا المرساة قد يُلتقط تعليقٌ من `claude.yml` (استدعاءُ `@claude`) أو من
+          #    تشغيلةٍ أقدمَ على الـPR نفسِه ⇒ **بوّابةٌ تخضرّ زوراً**.
+          # ⚠️ ويُستعمل jq **المدمجُ في `gh`** لا الخارجيّ: الخارجيُّ غائبٌ عن جهاز التطوير
+          #    ⇒ لولا ذلك لشُحن سكربتٌ لم تُشغَّل ضوابطُه محلّياً قطّ.
+          body=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq "[.[] | select(.user.login==\"claude[bot]\") | select(.body | contains(\"actions/runs/${RUN_ID}\"))] | last // {} | .body // \"\"" 2>&1)
+          rc=$?
+
+          # 🔴 ويُفصَل «تعذّر الاستعلام» عن «لا تعليق»: خلطُهما يُعلن نتيجةً من قياسٍ ناقص.
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::تعذّر الاستعلامُ عن تعليقات الـPR — **قياسٌ ناقصٌ لا نتيجة**."
+            printf '%s\n' "$body" | head -n 3
             exit 1
           fi
 
-          case "$body" in
-            '**Claude encountered an error'*)
-              echo "::error::المراجعةُ فشلت — التعليقُ يبدأ بـ«Claude encountered an error»."
-              printf '%s\n' "${body%%$'\n'*}" >> "$GITHUB_STEP_SUMMARY"
-              exit 1
-              ;;
-          esac
+          if [ -n "$body" ]; then
+            case "$body" in
+              '**Claude encountered an error'*)
+                echo "::error::المراجعةُ فشلت — التعليقُ يبدأ بـ«Claude encountered an error»."
+                printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
+                exit 1
+                ;;
+            esac
+            echo "OK - a review comment from claude[bot] is published for run ${RUN_ID}."
+            printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
-          echo "OK - a review comment from claude[bot] is published."
-          printf '%s\n' "${body%%$'\n'*}" >> "$GITHUB_STEP_SUMMARY"
+          # ── لا تعليقَ لهذه التشغيلة: يُشخَّص السببُ ويُسمّى، **ولا يُعفى** ────────────
+          touches_workflow=no
+          if gh pr diff "$PR_NUMBER" --name-only 2>/dev/null \
+               | grep -qx ".github/workflows/claude-review.yml"; then
+            touches_workflow=yes
+          fi
+
+          if [ "$REVIEW_OUTCOME" = "success" ] && [ "$touches_workflow" = "yes" ]; then
+            echo "::error::الأكشنُ تخطّى نفسَه بـ«workflow validation» لأن هذا الـPR يعدّل \
+          claude-review.yml — وهو متوقَّعٌ ويعمل بعد الدمج. 🔴 **لكنّ المراجعةَ لم تجرِ**، \
+          فالأحمرُ صادقٌ ومعناه «لم تُراجَع». والدمجُ قرارُ بشرٍ لا لونُ فحص."
+          else
+            echo "::error::لا تعليقَ من claude[bot] لهذه التشغيلة (${RUN_ID}) — المراجعةُ \
+          لم تُنشَر. وحالةُ خطوة المراجعة: ${REVIEW_OUTCOME}."
+          fi
+          {
+            echo "review-published=false"
+            echo "review-step-outcome=${REVIEW_OUTCOME}"
+            echo "pr-touches-review-workflow=${touches_workflow}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
