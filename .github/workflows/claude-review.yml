@@ -192,8 +192,16 @@ jobs:
             # 🟢 فصار يلزم شاهدٌ موجب: رأسُ `**Claude finished` **أو** مراجعةٌ منشورة.
             #    ⚠️ والرأسُ **لا يحكم وحدَه** (‏#36 و#32 يُثبتان ذلك) — يصلح شاهداً موجباً
             #    إلى جانب `reviews`، لا فاصلاً سالباً.
+            # 🎯 **و`checked > 0` أُضيف 2026-09-08 بعد مقارنةِ قاعدتين، وكلٌّ سدّت ثقبَ
+            #    الأخرى — قِيس بحالتين مصطنَعتين:**
+            #    أ) رأسُ `finished` · **بلا قائمةِ تتبّعٍ إطلاقاً** · `reviews=0`
+            #       ⇒ الشرطُ السابق **يخضرّ** (ثقب) · و`checked>0` يحمرّه.
+            #    ب) رأسُ `error` · قائمةٌ مكتملة · `reviews=0`
+            #       ⇒ «‏`unchecked=0` و`checked>0`» وحدَها تخضرّ · وشرطُ الشاهد الموجب يحمرّه.
+            #    ⇒ **الاقترانُ يحمرّ في الحالتين** — ويفشل مغلقاً على ما لم يُقَس.
             finished=no
             case "$body" in '**Claude finished'*) finished=yes ;; esac
+            checked=$(printf '%s' "$body" | grep -c -- "- \[x\]")
 
             if [ "$unchecked" -gt 0 ]; then
               echo "::error::المراجعةُ ناقصةٌ — بقي ${unchecked} مربّعاً غيرَ مؤشَّر \
@@ -202,17 +210,24 @@ jobs:
               exit 1
             fi
 
-            if [ "$finished" = "no" ] && [ "$reviews" -eq 0 ]; then
-              echo "::error::لا شاهدَ موجباً على اكتمال المراجعة — لا رأسَ «Claude finished» \
-          ولا مراجعةَ منشورة، و«unchecked=0» قد يكون لأن قائمةَ التتبّع لم تُنشأ أصلاً."
+            if [ "$checked" -eq 0 ]; then
+              echo "::error::لا قائمةَ تتبّعٍ مكتملةٍ في التعليق (checked=0) — و«unchecked=0» \
+          هنا يعني أن القائمةَ **لم تُنشأ أصلاً** لا أنها اكتملت."
               printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
               exit 1
             fi
 
-            echo "OK - review published for run ${RUN_ID} (unchecked=${unchecked}, reviews=${reviews}, finished=${finished})."
+            if [ "$finished" = "no" ] && [ "$reviews" -eq 0 ]; then
+              echo "::error::لا شاهدَ موجباً على نشر المراجعة — لا رأسَ «Claude finished» \
+          ولا مراجعةَ منشورة على الـPR (checked=${checked})."
+              printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+
+            echo "OK - review published for run ${RUN_ID} (unchecked=${unchecked}, checked=${checked}, reviews=${reviews}, finished=${finished})."
             {
               printf '%s\n' "$body" | head -n 1
-              echo "unchecked=${unchecked} · reviews=${reviews}"
+              echo "unchecked=${unchecked} · checked=${checked} · reviews=${reviews} · finished=${finished}"
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
