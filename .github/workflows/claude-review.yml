@@ -164,16 +164,35 @@ jobs:
           #       التتبّع ٦١٩–٧٤٥ (وهي مستثناةٌ أصلاً برابط التشغيلة).
           #    🔴 و`created_at >= t.created_at` إلزاميّ — بدونه تُحسب مراجعةُ تشغيلةٍ
           #       سابقةٍ على الـPR نفسِه شاهداً لهذه، فتخضرّ البوّابةُ زوراً.
+          # 🔴 **وشرطان يضيّقان `sep` — أُضيفا 2026-09-08 بعد ثقبٍ نبّهت إليه جلسةُ
+          #    `rukn-tasawuq-erp` ونُقض عندي بالقياس لا بالقبول:**
+          #    `claude.yml` **بلا `track_progress`** (مقيس) ⇒ ردُّه على `@claude` تعليقُ
+          #    `claude[bot]` **بلا رابطِ تشغيلة** ⇒ **كان يُحتسب `sep` فتخضرّ البوّابةُ
+          #    بصفر مراجعة**. والثقبُ **نظريٌّ هنا ولم يقع** (مسحُ ٦٠ PR: صفرُ استدعاءِ
+          #    `@claude` من بشر · وتعليقٌ واحدٌ بلا مرساة هو مراجعةُ #35) — **ويُسدّ لأنه
+          #    ممكنٌ لا لأنه وقع**.
+          #    ① **نافذةٌ زمنيّة ≤ ١٨٠٠ ثانية** = `timeout-minutes: 30` نفسُها: ما بعدها
+          #       **لا يمكن أن يكون مخرَجَ هذه التشغيلة** بنيويّاً. (فجوةُ #35 = ٣د ٥١ث.)
+          #    ② **وإن استدعى بشرٌ `@claude` بعد تعليق التتبّع فلا يُنسب `sep` لهذه
+          #       التشغيلة** — النسبةُ تصير غيرَ قابلةٍ للتمييز، **والأسلمُ الأحمر**.
+          # ⚠️ **ولا يُنقَل هذا الشرطُ إلى مستودعٍ آخر بلا قياس:** في `rukn-tasawuq-erp`
+          #    نمطُ التعليق المنفصل **لا يقع أصلاً** (`sep=0` في #12 و#8) ⇒ `sep>0` هناك
+          #    **خطرٌ بلا فائدة**. **القاعدةُ واحدةٌ والمعايرةُ محلّية.**
           triple=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
-            --jq '[.[] | select(.user.login=="claude[bot]")] as $all
-| ([$all[] | select(.body | contains("actions/runs/'"${RUN_ID}"'"))] | last) as $t
+            --jq '[.[] | select(.user.login=="claude[bot]")] as $bot
+| [.[] | select(.user.login!="claude[bot]")] as $hum
+| ([$bot[] | select(.body | contains("actions/runs/'"${RUN_ID}"'"))] | last) as $t
 | if $t == null then "NOCOMMENT"
-  else (($t.body | split("- [ ]") | length - 1)) as $u
+  else ($t.created_at | fromdateiso8601) as $t0
+     | (($t.body | split("- [ ]") | length - 1)) as $u
      | (($t.body | split("- [x]") | length - 1)) as $c
-     | ([$all[] | select(.created_at >= $t.created_at)
+     | ([$bot[] | select((.created_at|fromdateiso8601) >= $t0)
+                | select((.created_at|fromdateiso8601) <= ($t0 + 1800))
                 | select(.body | contains("actions/runs/") | not)
                 | select((.body|length) >= 500)] | length) as $e
-     | "\($u) \($c) \($e)"
+     | ([$hum[] | select((.created_at|fromdateiso8601) >= $t0)
+                | select(.body | contains("@claude"))] | length) as $m
+     | "\($u) \($c) \($e) \($m)"
   end' 2>&1)
           rc=$?
 
@@ -188,6 +207,15 @@ jobs:
             unchecked=$(printf '%s' "$triple" | awk '{print $1}')
             checked=$(printf '%s'   "$triple" | awk '{print $2}')
             separate=$(printf '%s'  "$triple" | awk '{print $3}')
+            mention=$(printf '%s'   "$triple" | awk '{print $4}')
+
+            # 🔴 استدعاءُ `@claude` بعد تعليق التتبّع يجعل نسبةَ التعليق المنفصل
+            #    **غيرَ قابلةٍ للتمييز** بين مراجعةٍ وجوابِ استدعاء ⇒ يُلغى `sep`.
+            if [ "${mention:-0}" -gt 0 ] && [ "$separate" -gt 0 ]; then
+              echo "::warning::أُلغيت شهادةُ التعليق المنفصل: استُدعي @claude ${mention} مرّةً \
+          بعد تعليق التتبّع ⇒ لا يُميَّز جوابُ الاستدعاء من المراجعة. الحكمُ بالمربّعات وحدَها."
+              separate=0
+            fi
             # 🔴 **الرأسُ ليس حكماً — مُثبَتٌ بالأثر:** #36 و#32 رأسُهما «error»
             #    ومراجعتُهما منشورةٌ كاملة (‏checked=8/6 · len 5478/5022)، وهما تشغيلتا
             #    «تجاوزِ السقف» ⇒ الفحصُ البعديُّ للسقف كتب رأسَ «error» فوق نجاح.
