@@ -103,14 +103,49 @@ $prodMax   = if ($prodCodes.Count) { ($prodCodes | Measure-Object -Maximum).Maxi
 
 $findings = @()
 $warnings = @()
+$acked    = @()
+
+# ── سجلُّ حالةِ المسار الذي أقرّه المالك (‏الـAPI لا يعرض الإيقافَ ولا «غير نشط») ──
+# 🔴 الإقرارُ مُثبَّتٌ برقم الحزمة لا بالاسم: إن تغيّرت حِزَمُ المسار عند Play سقط
+#   الإقرارُ وعاد الأحمرُ تلقائياً. تخفيفٌ لا عمى.
+$stateFile = Join-Path (Split-Path -Parent $PSScriptRoot) "track-state.json"
+$trackState = @{}
+if (Test-Path $stateFile) {
+    try {
+        $sj = Get-Content -LiteralPath $stateFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($sj.tracks) {
+            foreach ($p in $sj.tracks.PSObject.Properties) { $trackState[$p.Name] = $p.Value }
+        }
+    } catch {
+        $warnings += "تعذّرت قراءةُ track-state.json — يُعامَل غيرَ موجود: $($_.Exception.Message)"
+    }
+}
+
+function Get-TrackAck([string]$track, [int[]]$codes) {
+    if (-not $trackState.ContainsKey($track)) { return $null }
+    $rec = $trackState[$track]
+    $recCodes = @($rec.versionCodes | ForEach-Object { [int]$_ }) | Sort-Object
+    $now      = @($codes) | Sort-Object
+    # 🔴 التطابقُ حرفيٌّ في الطرفين — لا «يحتوي»: زيادةُ حزمةٍ تعني رفعةً جديدة.
+    if (($recCodes -join ',') -ne ($now -join ',')) { return $null }
+    return $rec
+}
 
 # ① 🔴 المطابقةُ تُقاس على اتّحاد المسارات — لا على الإنتاج وحده
 foreach ($r in $releases) {
     if ($r.track -eq 'production') { continue }
-    foreach ($c in $r.codes) {
-        if ($null -ne $prodMax -and $c -lt $prodMax) {
-            $findings += "المسارُ [$($r.track)] يحمل الحزمة $c وهي **أقدمُ** من إنتاجٍ على $prodMax — «$($r.name)»"
+    $stale = @($r.codes | Where-Object { $null -ne $prodMax -and $_ -lt $prodMax })
+    if ($stale.Count -eq 0) { continue }
+    $ack = Get-TrackAck $r.track $r.codes
+    if ($ack) {
+        $acked += [pscustomobject]@{
+            track = $r.track; codes = $stale; state = $ack.state
+            since = $ack.since; evidence = $ack.evidence
         }
+        continue
+    }
+    foreach ($c in $stale) {
+        $findings += "المسارُ [$($r.track)] يحمل الحزمة $c وهي **أقدمُ** من إنتاجٍ على $prodMax — «$($r.name)»"
     }
 }
 
@@ -133,19 +168,24 @@ $report = [ordered]@{
     play       = [ordered]@{ bundles = $playCodes; nextFree = $nextFree; productionMax = $prodMax }
     releases   = $releases
     findings   = $findings
+    acknowledged = $acked
     warnings   = $warnings
 }
 
-if ($Json) { $report | ConvertTo-Json -Depth 6; exit ($(if ($findings.Count) { 2 } elseif ($warnings.Count) { 1 } else { 0 })) }
+$exitCode = if ($findings.Count) { 2 } elseif ($warnings.Count -or $acked.Count) { 1 } else { 0 }
+
+if ($Json) { $report | ConvertTo-Json -Depth 6; exit $exitCode }
 
 Write-Host ""
 Write-Host "  play-audit — $($PROJ)" -ForegroundColor Cyan
 Write-Host "  source: $src" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  TRACKS (all four - compliance is measured on their UNION)" -ForegroundColor Cyan
+$ackedTracks = @($acked | ForEach-Object { $_.track })
 foreach ($r in $releases) {
-    $mark = if ($r.track -ne 'production' -and $null -ne $prodMax -and ($r.codes | Where-Object { $_ -lt $prodMax })) { "!!" } else { "  " }
-    $col  = if ($mark -eq "!!") { "Red" } else { "Gray" }
+    $isStale = ($r.track -ne 'production' -and $null -ne $prodMax -and ($r.codes | Where-Object { $_ -lt $prodMax }))
+    $mark = if ($isStale -and $ackedTracks -contains $r.track) { "~~" } elseif ($isStale) { "!!" } else { "  " }
+    $col  = switch ($mark) { "!!" { "Red" } "~~" { "DarkYellow" } default { "Gray" } }
     Write-Host ("  {0} [{1,-10}] codes: {2,-10} status: {3,-10} {4}" -f $mark, $r.track, ($r.codes -join ','), $r.status, $r.name) -ForegroundColor $col
 }
 Write-Host ""
@@ -166,6 +206,16 @@ if ($findings.Count) {
 } else {
     Write-Host "  FINDINGS: لا شيء 🎉" -ForegroundColor Green
 }
+if ($acked.Count) {
+    Write-Host ""
+    Write-Host "  ACKNOWLEDGED ($($acked.Count)) — مسارٌ بائتٌ **أقرّ المالكُ حالتَه** من Console" -ForegroundColor DarkYellow
+    foreach ($a in $acked) {
+        Write-Host ("  ~~ [{0}] الحزمة {1} · «{2}» منذ {3}" -f $a.track, ($a.codes -join ','), $a.state, $a.since) -ForegroundColor DarkYellow
+        Write-Host ("     الدليل: {0}" -f $a.evidence) -ForegroundColor DarkGray
+    }
+    Write-Host "     🔴 والإقرارُ مُثبَّتٌ بالحزمة: أوّلُ رفعةٍ جديدةٍ إلى المسار تُبطله ويعود 🔴." -ForegroundColor DarkYellow
+    Write-Host "     ⇒ الحكمُ النهائيُّ يبقى من صفحة «حالة السياسة» في Console وحدها." -ForegroundColor DarkGray
+}
 if ($warnings.Count) {
     Write-Host ""
     Write-Host "  WARNINGS ($($warnings.Count)) — مصادرُ لم تُقَس، وهي ليست «صفراً»" -ForegroundColor Yellow
@@ -173,4 +223,4 @@ if ($warnings.Count) {
 }
 Write-Host ""
 
-exit ($(if ($findings.Count) { 2 } elseif ($warnings.Count) { 1 } else { 0 }))
+exit $exitCode

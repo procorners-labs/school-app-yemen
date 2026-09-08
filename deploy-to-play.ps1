@@ -43,7 +43,16 @@ param(
     # 🔴 **لا يُستعمل إلّا حين يعجز الاشتقاقُ من Play** (حزمةٌ مرفوعةٌ لم تُسنَد لأيّ
     #   مسارٍ بعد، فلا إصدارَ يحمل اسمَها). والافتراضُ أن يبقى فارغاً: الاسمُ يُقرأ
     #   من Play لا يُكتب بيد، لأن اليدَ هي التي أدخلت الخطأ أصلاً (انظر أدناه).
-    [string]$ReleaseName = ""
+    [string]$ReleaseName = "",
+
+    # ── 🎯 المرشّحُ السادس لسقوطِ الرفع الصامت — أداةُ عزلٍ لا إصلاحٌ مُثبَت ────────
+    # يضيف `?changesNotSentForReview=true` إلى نداء `Edits.commit`.
+    # **الفرضيّة:** التطبيقُ عليه **نشرٌ مُدار**، والنشرُ المُدار **لا يسري على
+    # `internal`** ⇒ يفسّر لماذا ينجح `internal` وحدَه وتسقط الثلاثةُ الأخرى صامتةً.
+    # 🔴 **وحدُّها يُقال: فرضيّةٌ لم تُثبَت** — وسقط قبلها خمسةُ مرشّحين، آخرُها الأذونُ
+    #   التي بَرِئت **بالأثر** (مُنِح «المشرف الكامل» ثمّ سقطت الترقيةُ سواءً · 2026-09-08).
+    # 🟢 والاختبارُ بها **مجانيٌّ في وضع `-Promote`**: لا رفعَ فيه فلا رقمَ يُحرق.
+    [switch]$ChangesNotSentForReview
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -552,15 +561,27 @@ INFO "Track body: $($trackBody -replace '\s+', ' ')"
 $trackUrl  = "$API_BASE/applications/$PACKAGE_NAME/edits/$editId/tracks/$Track"
 $trackResp = Invoke-RestMethod -Uri $trackUrl -Method Put -Headers $authHeader -ContentType "application/json" -Body $trackBody
 OK "Assigned to track: $Track"
+# 🔴 **يُطبع جسمُ الردّ ولا يُهمَل** (أُضيف 2026-09-08): كان يُلقى في متغيّرٍ لا يُقرأ،
+#   فبقي «‏Assigned» شهادةً جوفاء أربعَ مرّاتٍ سقطت كلُّها. **وPlay يعيد موردَ Track
+#   كما خزّنه** ⇒ إن خلا من الرقم المطلوب فالرفضُ عند الكتابة لا عند الالتزام.
+INFO "tracks.update response: $((($trackResp | ConvertTo-Json -Depth 6 -Compress)))"
 
 # ════════════════════════════════════════════════════════════════════════════
 # STEP 7: Commit the edit (makes it live/visible)
 # ════════════════════════════════════════════════════════════════════════════
 STEP "Committing edit (finalizing upload)..."
 
-$commitResp = Invoke-RestMethod -Uri "$API_BASE/applications/$PACKAGE_NAME/edits/$editId:commit" `
-    -Method Post -Headers $authHeader
-OK "Edit committed successfully"
+$commitUri = "$API_BASE/applications/$PACKAGE_NAME/edits/$editId`:commit"
+if ($ChangesNotSentForReview) {
+    $commitUri += "?changesNotSentForReview=true"
+    INFO "Commit with changesNotSentForReview=true  (isolation probe - hypothesis, not a proven fix)"
+}
+$commitResp = Invoke-RestMethod -Uri $commitUri -Method Post -Headers $authHeader
+# 🔴 «‏committed successfully» **كذبٌ مُثبَتٌ بالأثر** حين لا يكون المسارُ `internal`:
+#   طُبعت في 4/4 محاولاتٍ سقطت جميعُها. ⇒ **لا تُقرأ شهادةَ نجاح**، والحكمُ من
+#   خطوة التحقّق أدناه ومن قراءةٍ مستقلّةٍ بعدها.
+OK "Edit commit call returned OK (NOT proof - see verification below)"
+INFO "commit response: $((($commitResp | ConvertTo-Json -Depth 6 -Compress)))"
 
 # ════════════════════════════════════════════════════════════════════════════
 # STEP 8: Verify upload
