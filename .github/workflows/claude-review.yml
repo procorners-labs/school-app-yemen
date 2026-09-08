@@ -180,20 +180,20 @@ jobs:
           #    **خطرٌ بلا فائدة**. **القاعدةُ واحدةٌ والمعايرةُ محلّية.**
           triple=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
             --jq '[.[] | select(.user.login=="claude[bot]")] as $bot
-| [.[] | select(.user.login!="claude[bot]")] as $hum
-| ([$bot[] | select(.body | contains("actions/runs/'"${RUN_ID}"'"))] | last) as $t
-| if $t == null then "NOCOMMENT"
-  else ($t.created_at | fromdateiso8601) as $t0
-     | (($t.body | split("- [ ]") | length - 1)) as $u
-     | (($t.body | split("- [x]") | length - 1)) as $c
-     | ([$bot[] | select((.created_at|fromdateiso8601) >= $t0)
+            | [.[] | select(.user.login!="claude[bot]")] as $hum
+            | ([$bot[] | select(.body | contains("actions/runs/'"${RUN_ID}"'"))] | last) as $t
+            | if $t == null then "NOCOMMENT"
+            else ($t.created_at | fromdateiso8601) as $t0
+            | (($t.body | split("- [ ]") | length - 1)) as $u
+            | (($t.body | split("- [x]") | length - 1)) as $c
+            | ([$bot[] | select((.created_at|fromdateiso8601) >= $t0)
                 | select((.created_at|fromdateiso8601) <= ($t0 + 1800))
                 | select(.body | contains("actions/runs/") | not)
                 | select((.body|length) >= 500)] | length) as $e
-     | ([$hum[] | select((.created_at|fromdateiso8601) >= $t0)
+            | ([$hum[] | select((.created_at|fromdateiso8601) >= $t0)
                 | select(.body | contains("@claude"))] | length) as $m
-     | "\($u) \($c) \($e) \($m)"
-  end' 2>&1)
+            | "\($u) \($c) \($e) \($m)"
+            end' 2>&1)
           rc=$?
 
           # 🔴 ويُفصَل «تعذّر الاستعلام» عن «لا تعليق»: خلطُهما يُعلن نتيجةً من قياسٍ ناقص.
