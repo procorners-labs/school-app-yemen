@@ -153,87 +153,60 @@ jobs:
           #    تشغيلةٍ أقدمَ على الـPR نفسِه ⇒ **بوّابةٌ تخضرّ زوراً**.
           # ⚠️ ويُستعمل jq **المدمجُ في `gh`** لا الخارجيّ: الخارجيُّ غائبٌ عن جهاز التطوير
           #    ⇒ لولا ذلك لشُحن سكربتٌ لم تُشغَّل ضوابطُه محلّياً قطّ.
-          body=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
-            --jq "[.[] | select(.user.login==\"claude[bot]\") | select(.body | contains(\"actions/runs/${RUN_ID}\"))] | last // {} | .body // \"\"" 2>&1)
+          # 🔴 **ويُقرأ تعليقُ التتبّع ومعه ما يليه — لا التعليقُ الأخير وحدَه.**
+          #    قِيس على PR #35: الأكشنُ ينشر **تعليقَي تتبّعٍ ومراجعة**، والمراجعةُ
+          #    (‏٣٬٠٩٥ حرفاً · «‏### مراجعة …») **بلا رابطِ تشغيلةٍ إطلاقاً** لأنها تُنشر
+          #    بـ`gh pr comment`، بينما تعليقُ التتبّع بقي `unchecked=1` ⇒ الحكمُ عليه
+          #    وحدَه **أحمرُ كاذبٌ على مراجعةٍ منشورةٍ كاملة**.
+          # 🟢 فيُحسب ثلاثيّ: مربّعاتُ تعليق التتبّع (‏`u`/`c`)، **و`sep`** = عددُ تعليقات
+          #    `claude[bot]` **بعده زمنياً** بلا رابطِ تشغيلةٍ وطولُها ≥ ٥٠٠ حرف.
+          #    ⚠️ وحدُّ الـ٥٠٠ مقيس: المراجعاتُ الحقيقيّة ٢٬٢٩٦–٣٬٦٧٦ حرفاً، وتعليقاتُ
+          #       التتبّع ٦١٩–٧٤٥ (وهي مستثناةٌ أصلاً برابط التشغيلة).
+          #    🔴 و`created_at >= t.created_at` إلزاميّ — بدونه تُحسب مراجعةُ تشغيلةٍ
+          #       سابقةٍ على الـPR نفسِه شاهداً لهذه، فتخضرّ البوّابةُ زوراً.
+          triple=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '[.[] | select(.user.login=="claude[bot]")] as $all
+| ([$all[] | select(.body | contains("actions/runs/'"${RUN_ID}"'"))] | last) as $t
+| if $t == null then "NOCOMMENT"
+  else (($t.body | split("- [ ]") | length - 1)) as $u
+     | (($t.body | split("- [x]") | length - 1)) as $c
+     | ([$all[] | select(.created_at >= $t.created_at)
+                | select(.body | contains("actions/runs/") | not)
+                | select((.body|length) >= 500)] | length) as $e
+     | "\($u) \($c) \($e)"
+  end' 2>&1)
           rc=$?
 
           # 🔴 ويُفصَل «تعذّر الاستعلام» عن «لا تعليق»: خلطُهما يُعلن نتيجةً من قياسٍ ناقص.
           if [ "$rc" -ne 0 ]; then
             echo "::error::تعذّر الاستعلامُ عن تعليقات الـPR — **قياسٌ ناقصٌ لا نتيجة**."
-            printf '%s\n' "$body" | head -n 3
+            printf '%s\n' "$triple" | head -n 3
             exit 1
           fi
 
-          if [ -n "$body" ]; then
-            # 🔴 **الرأسُ وحدَه ليس حكماً — مُثبَتٌ بالأثر على هذا المستودع 2026-09-08.**
-            #    PR #36 و#32 رأسُهما `**Claude encountered an error` **ومراجعتُهما منشورةٌ
-            #    كاملة**: `- [ ]`=0 · `- [x]`=8/6 · `pulls/N/reviews`=1 · الطول 5478/5022.
-            #    والسببُ ساخر: هما تشغيلتا «‏successful result after 23/20 turns, exceeding
-            #    the configured maximum» ⇒ **الفحصُ البعديُّ لـ`max-turns` هو الذي كتب رأسَ
-            #    «error» فوق مراجعةٍ ناجحة** — أي العلّةُ التي حُذفت للتوّ في هذا الـPR.
-            #    ⇒ لو بقي الرأسُ فاصلاً لعاقبت البوّابةُ على العلّة التي عالجناها.
-            # 🟢 **والفاصلُ المقيس يفصل الخمسَ فصلاً تامّاً:** مربّعٌ غيرُ مؤشَّر **مع**
-            #    غيابِ مراجعةٍ منشورة. (#48: غيرُ مؤشَّر=7 · reviews=0 ⇒ صفرُ مراجعة.)
-            unchecked=$(printf '%s' "$body" | grep -c -- "- \[ \]")
-            reviews=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --jq 'length' 2>/dev/null)
-            if [ -z "${reviews:-}" ]; then reviews=0; fi
-
-            case "$body" in
-              '**Claude encountered an error'*)
-                echo "::warning::رأسُ التعليق «Claude encountered an error» — وهو **ليس حكماً**؛ \
-          الفصلُ بالمربّعات والمراجعات (غيرُ مؤشَّر=${unchecked} · reviews=${reviews})."
-                ;;
-            esac
-
-            # 🔴 **الخضورُ يقوم على أثرٍ موجبٍ لا على غيابِ إشارة** — شُدِّد 2026-09-08.
-            #    كان الشرطُ «‏`unchecked=0`» كافياً، **وهو ثقبٌ**: تشغيلٌ يعطب **قبل إنشاء
-            #    قائمة التتبّع** يعطي `unchecked=0` **بالمصادفة لا بالإنجاز** ⇒ خضورٌ على
-            #    لا شيء. وهي عينُ الفئةِ التي كُتبت البوّابةُ لإغلاقها، **في ثوبٍ ثالث**.
-            # 🟢 فصار يلزم شاهدٌ موجب: رأسُ `**Claude finished` **أو** مراجعةٌ منشورة.
-            #    ⚠️ والرأسُ **لا يحكم وحدَه** (‏#36 و#32 يُثبتان ذلك) — يصلح شاهداً موجباً
-            #    إلى جانب `reviews`، لا فاصلاً سالباً.
-            # 🎯 **و`checked > 0` أُضيف 2026-09-08 بعد مقارنةِ قاعدتين، وكلٌّ سدّت ثقبَ
-            #    الأخرى — قِيس بحالتين مصطنَعتين:**
-            #    أ) رأسُ `finished` · **بلا قائمةِ تتبّعٍ إطلاقاً** · `reviews=0`
-            #       ⇒ الشرطُ السابق **يخضرّ** (ثقب) · و`checked>0` يحمرّه.
-            #    ب) رأسُ `error` · قائمةٌ مكتملة · `reviews=0`
-            #       ⇒ «‏`unchecked=0` و`checked>0`» وحدَها تخضرّ · وشرطُ الشاهد الموجب يحمرّه.
-            #    ⇒ **الاقترانُ يحمرّ في الحالتين** — ويفشل مغلقاً على ما لم يُقَس.
-            finished=no
-            case "$body" in '**Claude finished'*) finished=yes ;; esac
-            checked=$(printf '%s' "$body" | grep -c -- "- \[x\]")
-
-            if [ "$unchecked" -gt 0 ]; then
-              echo "::error::المراجعةُ ناقصةٌ — بقي ${unchecked} مربّعاً غيرَ مؤشَّر \
-          (reviews=${reviews}). المراجعةُ لم تكتمل."
-              printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
-              exit 1
+          if [ "$triple" != "NOCOMMENT" ]; then
+            unchecked=$(printf '%s' "$triple" | awk '{print $1}')
+            checked=$(printf '%s'   "$triple" | awk '{print $2}')
+            separate=$(printf '%s'  "$triple" | awk '{print $3}')
+            # 🔴 **الرأسُ ليس حكماً — مُثبَتٌ بالأثر:** #36 و#32 رأسُهما «error»
+            #    ومراجعتُهما منشورةٌ كاملة (‏checked=8/6 · len 5478/5022)، وهما تشغيلتا
+            #    «تجاوزِ السقف» ⇒ الفحصُ البعديُّ للسقف كتب رأسَ «error» فوق نجاح.
+            # 🟢 **والقاعدةُ المحمولة:** يخضرّ إن (‏قائمةُ التتبّع اكتملت: unchecked=0
+            #    و checked>0) **أو** (‏نُشرت مراجعةٌ في تعليقٍ منفصلٍ بعده: separate>0).
+            #    ⚠️ ولا عددُ المراجعات ولا رأسُ «Claude finished» في الحكم — كلاهما
+            #       **مشروطٌ بالمستودع**: yemen-schoolz#11 مراجعةٌ كاملةٌ بـreviews=0،
+            #       ومراجعةٌ بلا ملاحظاتٍ موضعيّة لا تُنشئ review أصلاً
+            #       (‏#33 و#24 هنا: reviews=0 ومراجعةٌ كاملةٌ منشورة).
+            if { [ "$unchecked" -eq 0 ] && [ "$checked" -gt 0 ]; } || [ "$separate" -gt 0 ]; then
+              echo "OK - review published for run ${RUN_ID} (u=${unchecked} c=${checked} sep=${separate})."
+              echo "review-published=true · u=${unchecked} · c=${checked} · sep=${separate}" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
             fi
 
-            if [ "$checked" -eq 0 ]; then
-              echo "::error::لا قائمةَ تتبّعٍ مكتملةٍ في التعليق (checked=0) — و«unchecked=0» \
-          هنا يعني أن القائمةَ **لم تُنشأ أصلاً** لا أنها اكتملت."
-              printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
-              exit 1
-            fi
-
-            # 🔴 **وشرطُ `(finished || reviews>0)` أُسقط 2026-09-08 — كان يُحمِّر مراجعاتٍ
-            #    ناجحة، ونُقض بقياسٍ مباشر:** `yemen-schoolz` PR #11 رأسُه `error` و
-            #    `unchecked=0` و`checked=6` و**`reviews=0`** — وجسمُه **مراجعةٌ كاملةٌ من
-            #    ٣٬١٣٩ حرفاً** تبدأ بـ«‏### مراجعة PR #11 ✅».
-            #    ⇒ `reviews=0` **لا يعني «لم تُنشر»**: مراجعةٌ بلا ملاحظاتٍ موضعيّة تُنشر
-            #    بـ`gh pr comment` وحده فلا تُنشئ `review` أصلاً. **والخطرُ قائمٌ هنا أيضاً**
-            #    — عيّناتُنا الثلاثُ (#34 #36 #32) صادف أن فيها ملاحظاتٍ موضعية، لا أكثر.
-            # 🟢 **فبقي الشرطُ المحمولُ وحدَه: `unchecked = 0` و`checked > 0`** — أثرٌ موجبٌ
-            #    من السطح نفسِه، غيرُ مشروطٍ بمستودعٍ ولا بشكل مطالبة.
-            #    و`finished`/`reviews` تُطبَعان **خبراً لا حكماً**.
-
-            echo "OK - review published for run ${RUN_ID} (unchecked=${unchecked}, checked=${checked}, reviews=${reviews}, finished=${finished})."
-            {
-              printf '%s\n' "$body" | head -n 1
-              echo "unchecked=${unchecked} · checked=${checked} · reviews=${reviews} · finished=${finished}"
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "::error::المراجعةُ لم تكتمل ولم تُنشر منفصلةً — قائمةُ التتبّع: \
+          غيرُ مؤشَّر=${unchecked} · مؤشَّر=${checked} · تعليقاتٌ منفصلةٌ لاحقة=${separate}."
+            echo "review-published=false · u=${unchecked} · c=${checked} · sep=${separate}" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
 
           # ── لا تعليقَ لهذه التشغيلة: يُشخَّص السببُ ويُسمّى، **ولا يُعفى** ────────────
