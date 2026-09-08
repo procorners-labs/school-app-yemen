@@ -113,10 +113,12 @@ jobs:
       #   🔴 PR #48 ⇒ يبدأ بـ`**Claude encountered an error` · و`reviews` **فارغة**.
       # ⚠️ وتفشل أيضاً حين **لا تعليقَ من `claude[bot]` أصلاً** — وهذا يغلق فئةَ
       #    «الإجراءُ يخضرّ وقد تخطّى التحقّق بلا نشرِ شيء».
-      # 🔴 **و`!cancelled()` لا `always()`** — `concurrency.cancel-in-progress: true` أعلاه
-      #    يُلغي التشغيلةَ عند كلّ دفعةٍ جديدة، و`always()` كان سيُحمِّر كلَّ إلغاءٍ مشروع.
+      # 🔴 **ولا `if:` إطلاقاً — لا `always()` ولا `!cancelled()`.**
+      #    `continue-on-error` على خطوة المراجعة يجعل هذه تجري في المسار الطبيعيّ.
+      #    ولو سقط `Checkout` فالتخطّي **هو الصواب**: الوظيفةُ تحمرّ بسببها الصحيح،
+      #    بينما `!cancelled()` كانت ستُجري البوّابةَ فتعلن «لا مراجعة» ⇒ **تشخيصٌ
+      #    كاذبٌ لعطلٍ في مكانٍ آخر**. (صُحّح 2026-09-08 بعد أن كان `!cancelled()`.)
       - name: Gate on a published review comment
-        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -146,15 +148,38 @@ jobs:
           fi
 
           if [ -n "$body" ]; then
+            # 🔴 **الرأسُ وحدَه ليس حكماً — مُثبَتٌ بالأثر على هذا المستودع 2026-09-08.**
+            #    PR #36 و#32 رأسُهما `**Claude encountered an error` **ومراجعتُهما منشورةٌ
+            #    كاملة**: `- [ ]`=0 · `- [x]`=8/6 · `pulls/N/reviews`=1 · الطول 5478/5022.
+            #    والسببُ ساخر: هما تشغيلتا «‏successful result after 23/20 turns, exceeding
+            #    the configured maximum» ⇒ **الفحصُ البعديُّ لـ`max-turns` هو الذي كتب رأسَ
+            #    «error» فوق مراجعةٍ ناجحة** — أي العلّةُ التي حُذفت للتوّ في هذا الـPR.
+            #    ⇒ لو بقي الرأسُ فاصلاً لعاقبت البوّابةُ على العلّة التي عالجناها.
+            # 🟢 **والفاصلُ المقيس يفصل الخمسَ فصلاً تامّاً:** مربّعٌ غيرُ مؤشَّر **مع**
+            #    غيابِ مراجعةٍ منشورة. (#48: غيرُ مؤشَّر=7 · reviews=0 ⇒ صفرُ مراجعة.)
+            unchecked=$(printf '%s' "$body" | grep -c -- "- \[ \]")
+            reviews=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --jq 'length' 2>/dev/null)
+            if [ -z "${reviews:-}" ]; then reviews=0; fi
+
             case "$body" in
               '**Claude encountered an error'*)
-                echo "::error::المراجعةُ فشلت — التعليقُ يبدأ بـ«Claude encountered an error»."
-                printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
-                exit 1
+                echo "::warning::رأسُ التعليق «Claude encountered an error» — وهو **ليس حكماً**؛ \
+          الفصلُ بالمربّعات والمراجعات (غيرُ مؤشَّر=${unchecked} · reviews=${reviews})."
                 ;;
             esac
-            echo "OK - a review comment from claude[bot] is published for run ${RUN_ID}."
-            printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
+
+            if [ "$unchecked" -gt 0 ] && [ "$reviews" -eq 0 ]; then
+              echo "::error::المراجعةُ ناقصةٌ — بقي ${unchecked} مربّعاً غيرَ مؤشَّر ولا مراجعةَ \
+          منشورة على الـPR. المراجعةُ لم تكتمل."
+              printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+
+            echo "OK - review published for run ${RUN_ID} (unchecked=${unchecked}, reviews=${reviews})."
+            {
+              printf '%s\n' "$body" | head -n 1
+              echo "unchecked=${unchecked} · reviews=${reviews}"
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
