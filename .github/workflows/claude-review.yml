@@ -45,7 +45,13 @@ jobs:
         with:
           fetch-depth: 1
 
+      # 🔴 `continue-on-error` عمداً — واللونُ لم يعد هو الحكم.
+      #    الحكمُ في خطوة «البوّابة» أدناه، وهي تقرأ **تعليقاً منشوراً** لا حالةَ خطوة.
+      #    والسببُ مقيس: هذا الإجراء يفشل بوجهين، وأحدُهما **ينشر مراجعةً ناجحةً ثمّ
+      #    يقلبها فشلاً**، والآخر يخضرّ بلا نشرِ شيء (‏`claude-action-green-on-validation-skip`).
       - name: Claude review
+        id: review
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -87,7 +93,148 @@ jobs:
           #    يُدمج بعد، وهو قرارُ أمنٍ في CI لم يُتَّخذ.
           # 🟢 و`--model claude-sonnet-5`: مراجعةٌ ساكنة متكرّرة ⇒ كسرُ الكلفة بلا خسارةٍ
           #    تُذكر. أمّا الاستدعاءُ الصريح بـ`@claude` فيبقى على النموذج الكامل.
+          # 🔴 **حُذف `--max-turns` كلّياً 2026-09-08 — والرقمُ لم يكن العلاج.**
+          #    قِيس `num_turns` على ثماني تشغيلات: نجاحاتٌ عند ١١ و١١ و**١٥** (على الحدّ
+          #    تماماً)، وفشلٌ عند **١٦** (‏`error_max_turns` ⇒ **صفرُ مراجعة** و$0.56 مهدورة)،
+          #    وعند ٢٠ و٢٣ برسالة «‏successful result after N turns, exceeding the configured
+          #    maximum of 15» ⇒ **المراجعةُ نجحت ثمّ مُحيت**. والذيلُ ١١→٢٣ ⇒ أيُّ رقمٍ
+          #    نختاره رهانٌ (بند `maxturns-cap-is-a-bet`؛ و`SchoolApp-gas` سقط عند ٣٠ لِـ٣٣).
+          # 🟢 والحدُّ الجامحُ يبقى قائماً: `timeout-minutes: 30` أعلاه — حدٌّ بالزمن لا
+          #    بالدورات، فلا يقلب نجاحاً إلى فشلٍ بأثرٍ رجعيّ.
           claude_args: |
             --model claude-sonnet-5
-            --max-turns 15
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+
+      # ════════════════════════════════════════════════════════════════════════
+      # 🔴 البوّابة: ضابطُ القبول **تعليقٌ منشور**، لا لونُ خطوة
+      # ════════════════════════════════════════════════════════════════════════
+      # البصمةُ مقيسةٌ من التعليقات نفسِها (2026-09-08):
+      #   🟢 PR #34 ⇒ يبدأ بـ`**Claude finished` · و`pulls/34/reviews` فيها `COMMENTED`×2.
+      #   🔴 PR #48 ⇒ يبدأ بـ`**Claude encountered an error` · و`reviews` **فارغة**.
+      # ⚠️ وتفشل أيضاً حين **لا تعليقَ من `claude[bot]` أصلاً** — وهذا يغلق فئةَ
+      #    «الإجراءُ يخضرّ وقد تخطّى التحقّق بلا نشرِ شيء».
+      # 🔴 **ولا `if:` إطلاقاً — لا `always()` ولا `!cancelled()`.**
+      #    `continue-on-error` على خطوة المراجعة يجعل هذه تجري في المسار الطبيعيّ.
+      #    ولو سقط `Checkout` فالتخطّي **هو الصواب**: الوظيفةُ تحمرّ بسببها الصحيح،
+      #    بينما `!cancelled()` كانت ستُجري البوّابةَ فتعلن «لا مراجعة» ⇒ **تشخيصٌ
+      #    كاذبٌ لعطلٍ في مكانٍ آخر**. (صُحّح 2026-09-08 بعد أن كان `!cancelled()`.)
+      - name: Gate on a published review comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_ID: ${{ github.run_id }}
+          REVIEW_OUTCOME: ${{ steps.review.outcome }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          # 🔴 **لا `-e` عمداً** — وهذا سدُّ فشلٍ صامتٍ **داخل علاجِ الفشل الصامت**:
+          #    تحت `set -e` يُنهي أيُّ أمرٍ يعود بغير صفرٍ السكربتَ **بلا رسالة** ⇒ بوّابةٌ
+          #    حمراءُ **بلا حكم**، وهي بعينها الفئةُ التي كُتبت البوّابةُ لإغلاقها.
+          set -uo pipefail
+
+          # 🔴 **حارسُ الافتراض — يُفحص قبل أيّ حكم.** شرطُ «مربّعٌ غيرُ مؤشَّر» يقوم كلُّه
+          #    على قائمة تتبّعٍ ينشئها `track_progress: true`. فإن أُطفئت أو حُذفت صار
+          #    `unchecked=0` **بالمصادفة لا بالاكتمال** ⇒ بوّابةٌ تخضرّ على لا شيء، وهي
+          #    عينُ فئةِ «الحارس الأجوف» التي كُتبت هذه البوّابةُ لإغلاقها.
+          # ⚠️ وحدُّه: يفحص **هذا الملفَّ وحده** — لا يسري على وركفلوهات أخرى.
+          if ! grep -qE '^\s*track_progress:\s*true\s*$' .github/workflows/claude-review.yml; then
+            # 🔴 **بلا backtick هنا عمداً** — داخل سلسلةٍ مزدوجةٍ يصير **استبدالَ أمرٍ**
+            #    لا نصّاً. وقع فعلاً في هذا السطر عند كتابته 2026-09-08.
+            #    ⚠️ و`bash -n` **لا يكشفه**: الاستبدالُ صحيحٌ نحوياً — قِيس. الكاشفُ
+            #    الوحيد فحصُ الـbacktick على الأسطر غيرِ التعليقية.
+            echo "::error::الخيار track_progress: true غاب عن claude-review.yml — وشرطُ \
+          المربّعات يقوم عليه. لا يُحكَم بلا افتراضِه: عدِّل البوّابةَ أوّلاً أو أعِد الإعداد."
+            exit 1
+          fi
+
+          # 🔴 مرساةُ `run_id`: جسمُ تعليق `claude[bot]` يحوي رابطَ تشغيلته حرفياً.
+          #    قِيس على PR #34: التعليقُ يحوي `actions/runs/33992517567` وهو رقمُ تشغيلته.
+          #    وبلا المرساة قد يُلتقط تعليقٌ من `claude.yml` (استدعاءُ `@claude`) أو من
+          #    تشغيلةٍ أقدمَ على الـPR نفسِه ⇒ **بوّابةٌ تخضرّ زوراً**.
+          # ⚠️ ويُستعمل jq **المدمجُ في `gh`** لا الخارجيّ: الخارجيُّ غائبٌ عن جهاز التطوير
+          #    ⇒ لولا ذلك لشُحن سكربتٌ لم تُشغَّل ضوابطُه محلّياً قطّ.
+          # 🔴 **ويُقرأ تعليقُ التتبّع ومعه ما يليه — لا التعليقُ الأخير وحدَه.**
+          #    قِيس على PR #35: الأكشنُ ينشر **تعليقَي تتبّعٍ ومراجعة**، والمراجعةُ
+          #    (‏٣٬٠٩٥ حرفاً · «‏### مراجعة …») **بلا رابطِ تشغيلةٍ إطلاقاً** لأنها تُنشر
+          #    بـ`gh pr comment`، بينما تعليقُ التتبّع بقي `unchecked=1` ⇒ الحكمُ عليه
+          #    وحدَه **أحمرُ كاذبٌ على مراجعةٍ منشورةٍ كاملة**.
+          # 🟢 فيُحسب ثلاثيّ: مربّعاتُ تعليق التتبّع (‏`u`/`c`)، **و`sep`** = عددُ تعليقات
+          #    `claude[bot]` **بعده زمنياً** بلا رابطِ تشغيلةٍ وطولُها ≥ ٥٠٠ حرف.
+          #    ⚠️ وحدُّ الـ٥٠٠ مقيس: المراجعاتُ الحقيقيّة ٢٬٢٩٦–٣٬٦٧٦ حرفاً، وتعليقاتُ
+          #       التتبّع ٦١٩–٧٤٥ (وهي مستثناةٌ أصلاً برابط التشغيلة).
+          #    🔴 و`created_at >= t.created_at` إلزاميّ — بدونه تُحسب مراجعةُ تشغيلةٍ
+          #       سابقةٍ على الـPR نفسِه شاهداً لهذه، فتخضرّ البوّابةُ زوراً.
+          triple=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '[.[] | select(.user.login=="claude[bot]")] as $all
+| ([$all[] | select(.body | contains("actions/runs/'"${RUN_ID}"'"))] | last) as $t
+| if $t == null then "NOCOMMENT"
+  else (($t.body | split("- [ ]") | length - 1)) as $u
+     | (($t.body | split("- [x]") | length - 1)) as $c
+     | ([$all[] | select(.created_at >= $t.created_at)
+                | select(.body | contains("actions/runs/") | not)
+                | select((.body|length) >= 500)] | length) as $e
+     | "\($u) \($c) \($e)"
+  end' 2>&1)
+          rc=$?
+
+          # 🔴 ويُفصَل «تعذّر الاستعلام» عن «لا تعليق»: خلطُهما يُعلن نتيجةً من قياسٍ ناقص.
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::تعذّر الاستعلامُ عن تعليقات الـPR — **قياسٌ ناقصٌ لا نتيجة**."
+            printf '%s\n' "$triple" | head -n 3
+            exit 1
+          fi
+
+          if [ "$triple" != "NOCOMMENT" ]; then
+            unchecked=$(printf '%s' "$triple" | awk '{print $1}')
+            checked=$(printf '%s'   "$triple" | awk '{print $2}')
+            separate=$(printf '%s'  "$triple" | awk '{print $3}')
+            # 🔴 **الرأسُ ليس حكماً — مُثبَتٌ بالأثر:** #36 و#32 رأسُهما «error»
+            #    ومراجعتُهما منشورةٌ كاملة (‏checked=8/6 · len 5478/5022)، وهما تشغيلتا
+            #    «تجاوزِ السقف» ⇒ الفحصُ البعديُّ للسقف كتب رأسَ «error» فوق نجاح.
+            # 🟢 **والقاعدةُ المحمولة:** يخضرّ إن (‏قائمةُ التتبّع اكتملت: unchecked=0
+            #    و checked>0) **أو** (‏نُشرت مراجعةٌ في تعليقٍ منفصلٍ بعده: separate>0).
+            #    ⚠️ ولا عددُ المراجعات ولا رأسُ «Claude finished» في الحكم — كلاهما
+            #       **مشروطٌ بالمستودع**: yemen-schoolz#11 مراجعةٌ كاملةٌ بـreviews=0،
+            #       ومراجعةٌ بلا ملاحظاتٍ موضعيّة لا تُنشئ review أصلاً
+            #       (‏#33 و#24 هنا: reviews=0 ومراجعةٌ كاملةٌ منشورة).
+            if { [ "$unchecked" -eq 0 ] && [ "$checked" -gt 0 ]; } || [ "$separate" -gt 0 ]; then
+              echo "OK - review published for run ${RUN_ID} (u=${unchecked} c=${checked} sep=${separate})."
+              echo "review-published=true · u=${unchecked} · c=${checked} · sep=${separate}" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            echo "::error::المراجعةُ لم تكتمل ولم تُنشر منفصلةً — قائمةُ التتبّع: \
+          غيرُ مؤشَّر=${unchecked} · مؤشَّر=${checked} · تعليقاتٌ منفصلةٌ لاحقة=${separate}."
+            echo "review-published=false · u=${unchecked} · c=${checked} · sep=${separate}" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          # ── لا تعليقَ لهذه التشغيلة: يُشخَّص السببُ ويُسمّى، **ولا يُعفى** ────────────
+          # 🟢 **يُقاس السببُ نفسُه لا خبرٌ عنه** (بُدِّل 2026-09-08 عن `gh pr diff`):
+          #    الأكشنُ يشترط تطابقَ ملفّ الوركفلو مع نسخته على الفرع الافتراضيّ ⇒ تُقارَن
+          #    بصمتا الملفّ مباشرةً، وكلتاهما متاحةٌ **لحظةَ التشغيل** لا بعد انتهائه.
+          # 🎯 وهو أدقُّ من فحص الـdiff: يلتقط زيادةً **الفرعَ القديمَ الذي اختلفت نسختُه
+          #    بلا أن يمسّها أحد** — حالةٌ لا يراها `gh pr diff` إطلاقاً.
+          # 🟢 مقيسٌ على هذا المستودع: PR #49 (يمسّ الوركفلو) ⇒ بصمتان مختلفتان ·
+          #    PR #36 (لا يمسّه) ⇒ **متطابقتان** ⇒ يكشف ولا يُنذر كاذباً.
+          WF=".github/workflows/claude-review.yml"
+          sha_head=$(gh api "repos/${GITHUB_REPOSITORY}/contents/${WF}?ref=${HEAD_SHA}" --jq .sha 2>/dev/null)
+          sha_base=$(gh api "repos/${GITHUB_REPOSITORY}/contents/${WF}?ref=${DEFAULT_BRANCH}" --jq .sha 2>/dev/null)
+
+          if [ -n "${sha_head:-}" ] && [ -n "${sha_base:-}" ] && [ "$sha_head" != "$sha_base" ]; then
+            echo "::error::الأكشنُ تخطّى نفسَه بـ«workflow validation»: نسخةُ ${WF} على هذا \
+          الفرع (${sha_head}) تخالف نسخةَ ${DEFAULT_BRANCH} (${sha_base}) — وهو متوقَّعٌ \
+          ويعمل بعد الدمج. 🔴 لكنّ المراجعةَ لم تجرِ، فالأحمرُ صادقٌ ومعناه «لم تُراجَع». \
+          والدمجُ قرارُ بشرٍ لا لونُ فحص."
+          else
+            echo "::error::لا تعليقَ من claude[bot] لهذه التشغيلة (${RUN_ID}) — المراجعةُ \
+          لم تُنشَر. وحالةُ خطوة المراجعة: ${REVIEW_OUTCOME} · بصمتا الوركفلو: \
+          ${sha_head:-?} / ${sha_base:-?}."
+          fi
+          {
+            echo "review-published=false"
+            echo "review-step-outcome=${REVIEW_OUTCOME}"
+            echo "workflow-sha-head=${sha_head:-?}"
+            echo "workflow-sha-base=${sha_base:-?}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
