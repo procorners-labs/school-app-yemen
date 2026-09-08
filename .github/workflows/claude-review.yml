@@ -124,6 +124,8 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           RUN_ID: ${{ github.run_id }}
           REVIEW_OUTCOME: ${{ steps.review.outcome }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           # 🔴 **لا `-e` عمداً** — وهذا سدُّ فشلٍ صامتٍ **داخل علاجِ الفشل الصامت**:
           #    تحت `set -e` يُنهي أيُّ أمرٍ يعود بغير صفرٍ السكربتَ **بلا رسالة** ⇒ بوّابةٌ
@@ -183,14 +185,31 @@ jobs:
                 ;;
             esac
 
-            if [ "$unchecked" -gt 0 ] && [ "$reviews" -eq 0 ]; then
-              echo "::error::المراجعةُ ناقصةٌ — بقي ${unchecked} مربّعاً غيرَ مؤشَّر ولا مراجعةَ \
-          منشورة على الـPR. المراجعةُ لم تكتمل."
+            # 🔴 **الخضورُ يقوم على أثرٍ موجبٍ لا على غيابِ إشارة** — شُدِّد 2026-09-08.
+            #    كان الشرطُ «‏`unchecked=0`» كافياً، **وهو ثقبٌ**: تشغيلٌ يعطب **قبل إنشاء
+            #    قائمة التتبّع** يعطي `unchecked=0` **بالمصادفة لا بالإنجاز** ⇒ خضورٌ على
+            #    لا شيء. وهي عينُ الفئةِ التي كُتبت البوّابةُ لإغلاقها، **في ثوبٍ ثالث**.
+            # 🟢 فصار يلزم شاهدٌ موجب: رأسُ `**Claude finished` **أو** مراجعةٌ منشورة.
+            #    ⚠️ والرأسُ **لا يحكم وحدَه** (‏#36 و#32 يُثبتان ذلك) — يصلح شاهداً موجباً
+            #    إلى جانب `reviews`، لا فاصلاً سالباً.
+            finished=no
+            case "$body" in '**Claude finished'*) finished=yes ;; esac
+
+            if [ "$unchecked" -gt 0 ]; then
+              echo "::error::المراجعةُ ناقصةٌ — بقي ${unchecked} مربّعاً غيرَ مؤشَّر \
+          (reviews=${reviews}). المراجعةُ لم تكتمل."
               printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
               exit 1
             fi
 
-            echo "OK - review published for run ${RUN_ID} (unchecked=${unchecked}, reviews=${reviews})."
+            if [ "$finished" = "no" ] && [ "$reviews" -eq 0 ]; then
+              echo "::error::لا شاهدَ موجباً على اكتمال المراجعة — لا رأسَ «Claude finished» \
+          ولا مراجعةَ منشورة، و«unchecked=0» قد يكون لأن قائمةَ التتبّع لم تُنشأ أصلاً."
+              printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+
+            echo "OK - review published for run ${RUN_ID} (unchecked=${unchecked}, reviews=${reviews}, finished=${finished})."
             {
               printf '%s\n' "$body" | head -n 1
               echo "unchecked=${unchecked} · reviews=${reviews}"
@@ -199,23 +218,31 @@ jobs:
           fi
 
           # ── لا تعليقَ لهذه التشغيلة: يُشخَّص السببُ ويُسمّى، **ولا يُعفى** ────────────
-          touches_workflow=no
-          if gh pr diff "$PR_NUMBER" --name-only 2>/dev/null \
-               | grep -qx ".github/workflows/claude-review.yml"; then
-            touches_workflow=yes
-          fi
+          # 🟢 **يُقاس السببُ نفسُه لا خبرٌ عنه** (بُدِّل 2026-09-08 عن `gh pr diff`):
+          #    الأكشنُ يشترط تطابقَ ملفّ الوركفلو مع نسخته على الفرع الافتراضيّ ⇒ تُقارَن
+          #    بصمتا الملفّ مباشرةً، وكلتاهما متاحةٌ **لحظةَ التشغيل** لا بعد انتهائه.
+          # 🎯 وهو أدقُّ من فحص الـdiff: يلتقط زيادةً **الفرعَ القديمَ الذي اختلفت نسختُه
+          #    بلا أن يمسّها أحد** — حالةٌ لا يراها `gh pr diff` إطلاقاً.
+          # 🟢 مقيسٌ على هذا المستودع: PR #49 (يمسّ الوركفلو) ⇒ بصمتان مختلفتان ·
+          #    PR #36 (لا يمسّه) ⇒ **متطابقتان** ⇒ يكشف ولا يُنذر كاذباً.
+          WF=".github/workflows/claude-review.yml"
+          sha_head=$(gh api "repos/${GITHUB_REPOSITORY}/contents/${WF}?ref=${HEAD_SHA}" --jq .sha 2>/dev/null)
+          sha_base=$(gh api "repos/${GITHUB_REPOSITORY}/contents/${WF}?ref=${DEFAULT_BRANCH}" --jq .sha 2>/dev/null)
 
-          if [ "$REVIEW_OUTCOME" = "success" ] && [ "$touches_workflow" = "yes" ]; then
-            echo "::error::الأكشنُ تخطّى نفسَه بـ«workflow validation» لأن هذا الـPR يعدّل \
-          claude-review.yml — وهو متوقَّعٌ ويعمل بعد الدمج. 🔴 **لكنّ المراجعةَ لم تجرِ**، \
-          فالأحمرُ صادقٌ ومعناه «لم تُراجَع». والدمجُ قرارُ بشرٍ لا لونُ فحص."
+          if [ -n "${sha_head:-}" ] && [ -n "${sha_base:-}" ] && [ "$sha_head" != "$sha_base" ]; then
+            echo "::error::الأكشنُ تخطّى نفسَه بـ«workflow validation»: نسخةُ ${WF} على هذا \
+          الفرع (${sha_head}) تخالف نسخةَ ${DEFAULT_BRANCH} (${sha_base}) — وهو متوقَّعٌ \
+          ويعمل بعد الدمج. 🔴 لكنّ المراجعةَ لم تجرِ، فالأحمرُ صادقٌ ومعناه «لم تُراجَع». \
+          والدمجُ قرارُ بشرٍ لا لونُ فحص."
           else
             echo "::error::لا تعليقَ من claude[bot] لهذه التشغيلة (${RUN_ID}) — المراجعةُ \
-          لم تُنشَر. وحالةُ خطوة المراجعة: ${REVIEW_OUTCOME}."
+          لم تُنشَر. وحالةُ خطوة المراجعة: ${REVIEW_OUTCOME} · بصمتا الوركفلو: \
+          ${sha_head:-?} / ${sha_base:-?}."
           fi
           {
             echo "review-published=false"
             echo "review-step-outcome=${REVIEW_OUTCOME}"
-            echo "pr-touches-review-workflow=${touches_workflow}"
+            echo "workflow-sha-head=${sha_head:-?}"
+            echo "workflow-sha-base=${sha_base:-?}"
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
