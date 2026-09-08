@@ -217,12 +217,16 @@ jobs:
               exit 1
             fi
 
-            if [ "$finished" = "no" ] && [ "$reviews" -eq 0 ]; then
-              echo "::error::لا شاهدَ موجباً على نشر المراجعة — لا رأسَ «Claude finished» \
-          ولا مراجعةَ منشورة على الـPR (checked=${checked})."
-              printf '%s\n' "$body" | head -n 1 >> "$GITHUB_STEP_SUMMARY"
-              exit 1
-            fi
+            # 🔴 **وشرطُ `(finished || reviews>0)` أُسقط 2026-09-08 — كان يُحمِّر مراجعاتٍ
+            #    ناجحة، ونُقض بقياسٍ مباشر:** `yemen-schoolz` PR #11 رأسُه `error` و
+            #    `unchecked=0` و`checked=6` و**`reviews=0`** — وجسمُه **مراجعةٌ كاملةٌ من
+            #    ٣٬١٣٩ حرفاً** تبدأ بـ«‏### مراجعة PR #11 ✅».
+            #    ⇒ `reviews=0` **لا يعني «لم تُنشر»**: مراجعةٌ بلا ملاحظاتٍ موضعيّة تُنشر
+            #    بـ`gh pr comment` وحده فلا تُنشئ `review` أصلاً. **والخطرُ قائمٌ هنا أيضاً**
+            #    — عيّناتُنا الثلاثُ (#34 #36 #32) صادف أن فيها ملاحظاتٍ موضعية، لا أكثر.
+            # 🟢 **فبقي الشرطُ المحمولُ وحدَه: `unchecked = 0` و`checked > 0`** — أثرٌ موجبٌ
+            #    من السطح نفسِه، غيرُ مشروطٍ بمستودعٍ ولا بشكل مطالبة.
+            #    و`finished`/`reviews` تُطبَعان **خبراً لا حكماً**.
 
             echo "OK - review published for run ${RUN_ID} (unchecked=${unchecked}, checked=${checked}, reviews=${reviews}, finished=${finished})."
             {
