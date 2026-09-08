@@ -1,4 +1,25 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(unzip -l *)",
+      "Bash(apksigner verify *)",
+      "Bash(gh search *)",
+      "mcp__cloudflare-observability__query_worker_observability",
+      "mcp__cloudflare-observability__workers_list",
+      "mcp__cloudflare-observability__observability_keys",
+      "mcp__google-sheets__get_sheet_data",
+      "mcp__google-sheets__list_sheets",
+      "mcp__google-sheets__list_spreadsheets",
+      "mcp__plugin_cloudflare_cloudflare-builds__workers_builds_list_builds",
+      "mcp__plugin_cloudflare_cloudflare-builds__workers_list",
+      "mcp__plugin_github_github__pull_request_read",
+      "mcp__github__get_file_contents",
+      "mcp__claude_ai_Google_Calendar__list_events",
+      "mcp__claude_ai_Gmail__search_threads",
+      "mcp__claude_ai_Google_Drive__get_file_metadata",
+      "mcp__claude_ai_Google_Drive__get_file_permissions"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
