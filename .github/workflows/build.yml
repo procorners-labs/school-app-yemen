@@ -25,6 +25,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # 🔴 قبل أيّ بناء — ولا يحتاج JDK ولا Gradle، فيفشل في ثوانٍ لا في دقائق.
+      #    العلّةُ التي يغلقها: backtick داخل سلسلةٍ مزدوجةِ الاقتباس في كتلة `run:`
+      #    يصير **استبدالَ أمرٍ لا نصّاً** ⇒ الحارسُ يطبع رسالتَه **فارغةَ المضمون**
+      #    ويخرج بحالته المقصودة كما لو نجح: فشلٌ صامتٌ **داخل رسالة الفشل نفسِها**.
+      #    ⚠️ و`bash -n` **لا يكشفه** (الاستبدالُ صحيحٌ نحوياً — قِيس بالأثر).
+      # 🟢 والسكربتُ يُشغّل ضابطَه المعاكس في **كلّ تشغيلة** قبل أيّ حكم، ويخرج بـ`2`
+      #    إن أخفق ⇒ «صفرُ مطابقة» منه شهادةُ سلامةٍ لا نقصُ قياس.
+      - name: Guard — no bare backtick in run: blocks
+        run: node .github/scripts/check-run-backticks.js .github/workflows
+
       - name: Set up JDK 21
         uses: actions/setup-java@v6
         with:
@@ -50,6 +60,13 @@ jobs:
       #    التوقيع في CI، وهو قرارٌ أمنيّ منفصل لا ترقيةٌ تقنية.
       - name: Assemble debug
         run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # 🔴 الضابطُ المعاكس لقائمة تجاوز خطأ الشهادة (`AppConfigSslTrustTest`) لا قيمةَ
+      #    له إن لم يجرِ. وهو يعمل على JVM بلا محاكٍ لأن `isTrustedSslDomain` تستعمل
+      #    `java.net.URI` لا `android.net.Uri` — وذلك الاختيارُ **شرطُ قابليّة الإثبات**
+      #    لا تفضيلُ مكتبة.
+      - name: Unit tests (debug)
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
       - name: Report APK size
         if: success()
