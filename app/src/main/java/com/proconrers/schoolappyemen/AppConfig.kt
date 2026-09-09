@@ -213,16 +213,51 @@ object AppConfig {
 
     // ─── نطاقات SSL الموثوقة ──────────────────────────────────────────────────
     /**
+     * نطاقاتُ Google المسموحُ لها **تجاوزُ خطأِ شهادة** — وهي أضيقُ من [GOOGLE_HOSTS]
+     * عمداً، ولا تُوحَّد معها.
+     *
+     * 🔴 **كان `googleusercontent.com` هنا عارياً، وهو لاحقةُ محتوى مستخدمين:**
+     * نطاقاتُها الفرعيّة تُوزَّع على أطرافٍ عشوائيّة، فإدراجُها عاريةً يمنح
+     * **تجاوزَ التحقّق من الشهادة** لأيّ مستضيفٍ تحتها. والمضيفُ الذي يحتاجه
+     * التطبيقُ فعلاً واحد: إعادةُ توجيه Apps Script.
+     *
+     * ⚠️ **ولماذا قائمتان لا قائمةٌ مضيَّقة:** [GOOGLE_HOSTS] يقرؤها **مستهلكان**،
+     * هذه الدالّةُ و`routeTargetFor` (‏`isGoogleHost(host) => STAY`). فتضييقُها هي
+     * كان **يقذف صوَر Drive على `lh3.googleusercontent.com` إلى المتصفّح**
+     * ⇒ سياجٌ يكسر ما وُضع ليحميه. والتوجيهُ يبقى كما هو: تحميلٌ عاديٌّ بشهادةٍ
+     * صحيحة لا يمرّ بهذه القائمة أصلاً.
+     */
+    private val GOOGLE_SSL_HOSTS: List<String> = listOf(
+        "google.com",
+        "script.googleusercontent.com",
+        "googleapis.com",
+        "gstatic.com",
+        "googlevideo.com"
+    )
+
+    /**
      * تُقرأ في `onReceivedSslError` وحده. مطابقة **مضيف** لا `contains`
      * (‏القديم كان يُمرِّر `https://evil.com/?x=procorners.com`).
      */
     private val TRUSTED_SSL_HOSTS: List<String> =
-        PLATFORM_HOSTS + GOOGLE_HOSTS + listOf("procorners.com")
+        PLATFORM_HOSTS + GOOGLE_SSL_HOSTS + listOf("procorners.com")
+
+    /**
+     * مضيفُ الرابط بحروفٍ صغيرة، أو `null` إن تعذّر تحليلُه.
+     *
+     * 🔴 **`java.net.URI` عمداً لا `android.net.Uri`** — وهذا **شرطُ قابليّة الإثبات**
+     * لا تفضيلُ مكتبة: `Uri` إطارُ أندرويد فلا يعمل في اختبار JVM، فيستحيل إثباتُ
+     * **الحجب والسماح معاً** بلا محاكٍ ⇒ يبقى الحارسُ بلا ضابطٍ معاكس.
+     * ⚠️ و`URI` أصرمُ فيرمي على روابطَ يقبلها `Uri` (مسافةٌ غيرُ مُرمَّزة مثلاً)
+     * ⇒ `null` ⇒ **`false` ⇒ `cancel`**. والاتجاهُ مقصود: **الفشلُ مغلقٌ** في دالّةٍ
+     * تقرّر تجاوزَ خطأِ شهادة.
+     */
+    private fun sslHostOf(url: String): String? =
+        try { java.net.URI(url).host?.lowercase() } catch (e: Exception) { null }
 
     fun isTrustedSslDomain(url: String): Boolean {
-        val host = try { Uri.parse(url).host } catch (e: Exception) { null } ?: return false
-        val h = host.lowercase()
-        return TRUSTED_SSL_HOSTS.any { hostMatches(h, it) }
+        val host = sslHostOf(url) ?: return false
+        return TRUSTED_SSL_HOSTS.any { hostMatches(host, it.lowercase()) }
     }
 
     // ─── المزامنة من الخادم (معطّلة — راجع التحذير في init) ───────────────────
