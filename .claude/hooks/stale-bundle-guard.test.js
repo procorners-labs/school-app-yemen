@@ -51,7 +51,7 @@ function u16(n) { const b = Buffer.alloc(2); b.writeUInt16LE(n); return b; }
 function u32(n) { const b = Buffer.alloc(4); b.writeUInt32LE(n); return b; }
 
 /** حاويةُ ZIP صغيرةٌ بمدخلٍ مخزَّنٍ (method 0) يحمل المانيفستَ المصنوع */
-function synthAab(mf) {
+function synthAab(mf, tag) {
   const name = Buffer.from('base/manifest/AndroidManifest.xml', 'latin1');
   const lh = Buffer.concat([u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
     u32(0), u32(mf.length), u32(mf.length), u16(name.length), u16(0), name]);
@@ -61,7 +61,8 @@ function synthAab(mf) {
     u32(0), u32(0), name]);
   const eocd = Buffer.concat([u32(0x06054b50), u16(0), u16(0), u16(1), u16(1),
     u32(cd.length), u32(local.length), u16(0)]);
-  const p = path.join(os.tmpdir(), 'stale-bundle-guard-probe.zip');
+  // 🔴 ملفٌّ لكلّ حالة: مسارٌ مشترَكٌ يدهس سابقَه فيقيس بندٌ حالةَ غيرِه
+  const p = path.join(os.tmpdir(), 'stale-bundle-guard-probe-' + tag + '.zip');
   fs.writeFileSync(p, Buffer.concat([local, cd, eocd]));
   return p;
 }
@@ -72,13 +73,23 @@ const trap = Buffer.concat([
   Buffer.from([0x1a, 0x03]), Buffer.from('2.0', 'latin1'),   // قيمةُ الحقل الحقيقية
   Buffer.from(' trailing 1.0', 'latin1'),
 ]);
-const trapPath = synthAab(trap);
+const trapPath = synthAab(trap, "trap");
 
 check('يستخرج قيمةَ الحقل "2.0" لا السلسلةَ المجاورة', versionNameOf(trapPath), '2.0');
 check('شجرةٌ على "1.0" ⇒ لا يساوي ⇒ يُنذر', versionNameOf(trapPath) === '1.0', false);
 // 🟢 ضابطٌ يحرس الضابط: بلا هذا يخضرّ ⓐ لأنه لا يفحص شيئاً — صمتُ مِجَسّ لا سلامة
 check('والسلسلةُ الفخُّ حاضرةٌ فعلاً (وإلّا لم يفرز الضابط)',
   trap.includes(Buffer.from('1.0', 'latin1')), true);
+
+// 🟢 والقطبُ الأخضرُ يُبنى هنا لا على الحزمة الحقيقية — **لأن طرفيه مستقلّان**:
+//   قيمةٌ نصنعها ونعرفها سلفاً، تُقارَن بما استُخرج. وعلى الحزمة الحقيقية يستحيل
+//   ذلك: `stamp === stamp` تساوٍ ذاتيٌّ يخضرّ أبداً — **بندٌ لا يفحص شيئاً.**
+const okPath = synthAab(Buffer.concat([
+  Buffer.from([0x12, 0x0b]), Buffer.from('versionName', 'latin1'),
+  Buffer.from([0x1a, 0x03]), Buffer.from('1.0', 'latin1'),
+]), "green");
+check('القطبُ الأخضر — قيمةٌ معلومةٌ سلفاً تُستخرج كما هي ⇒ يصمت',
+  versionNameOf(okPath), '1.0');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ⓑ حدُّ القياس — مدخلٌ معطوبٌ يعيد null لا قيمةً مخترَعة (مستقلٌّ عن الحزمة)
@@ -101,8 +112,12 @@ const stamp = versionNameOf(AAB);
 console.log('\nⓒ الحزمة: ' + path.relative(ROOT, AAB).replace(/\\/g, '/'));
 console.log('   الختمُ المقروءُ من المانيفست: ' + JSON.stringify(stamp));
 
-console.log('\n   القطبُ الأخضر — يجب أن يصمت:');
-check('ختمُ الحزمة نفسُه يطابق', stamp === stamp, true);
+// 🔴 وكان هنا `stamp === stamp` — **تساوٍ ذاتيٌّ يخضرّ أبداً**، حتى لو عاد
+//   `null`. أُزيل 2026-09-12: القطبُ الأخضرُ يحتاج طرفين مستقلَّين، وهما
+//   لا يتوفّران على الحزمة الحقيقية ⇒ موضعُه ⓐ حيث نصنع القيمةَ ونعرفها.
+//   وما يصحّ قياسُه هنا: **أن الختمَ قِيس فعلاً** لا أنه يساوي نفسَه.
+console.log('\n   أن الختمَ قِيس فعلاً (لا null ولا سلسلةٌ فارغة):');
+check('نوعُه سلسلةٌ غيرُ فارغة', typeof stamp === 'string' && stamp.length > 0, true);
 
 console.log('\n   القطبُ الأحمر — يجب أن ينطق:');
 ['1.0', '3.0', '3.1', '9.9'].forEach(function (v) {
