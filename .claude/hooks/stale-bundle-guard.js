@@ -53,17 +53,30 @@ process.stdin.on('end', () => {
   } catch (e) { /* يُعامَل غيرَ مقيس */ }
   if (!treeName) process.exit(0);
 
-  let stamped = false;
-  try {
-    const buf = fs.readFileSync(aab); // يكفي البحثُ في الحاوية: الاسمُ يظهر نصّاً
-    stamped = buf.includes(Buffer.from(treeName, 'latin1'));
-  } catch (e) { process.exit(0); }
-  if (stamped) process.exit(0);
+  // 🔴 ولا يُطابَق الختمُ على بايتات الحزمة الخام — قِيس 2026-09-12 أنها كاذبة:
+  //   مدخلاتُ AAB كلُّها `deflate`، فـ`buf.includes("2.8")` كان **يصدق** على
+  //   حزمةٍ ختمُها `3.2` ⇒ شجرةٌ أُعيدت إلى ختمٍ منشورٍ أقدم تخضرّ صامتةً.
+  //   البديلُ يقرأ القيمةَ من مانيفست الحزمة ⇒ **تساوٍ لا احتواء**.
+  const bundleName = require('./aab-version-name').versionNameOf(aab);
 
   const rel = path.relative(root, aab).replace(/\\/g, '/');
+
+  // 🔴 تعذُّرُ القياس ليس براءة — يُقال ولا يُبتلع صمتاً
+  if (!bundleName) {
+    console.error(
+      '⚠️  تعذّرت قراءةُ ختمِ الحزمة من مانيفستها — **ولا يُقرأ هذا سلامة**.\n\n' +
+      '  الشجرةُ الآن على versionName "' + treeName + '"، والحزمةُ أقدمُ منها زمنياً:\n' +
+      '     ' + rel + '\n\n' +
+      '  ⇒ المطابقةُ غيرُ مقيسة. أعِد البناءَ أو شغّل `/release-preflight` قبل أيّ رفع.\n'
+    );
+    process.exit(2);
+  }
+
+  if (bundleName === treeName) process.exit(0);
   console.error(
     '⚠️  حزمةُ الإصدار في مجلد البناء صارت **بائتةَ الختم**.\n\n' +
-    '  الشجرةُ الآن على versionName "' + treeName + '"، والحزمةُ لا تحمله\n' +
+    '  الشجرةُ الآن على versionName "' + treeName + '"،\n' +
+    '  ومانيفستُ الحزمة يحمل "' + bundleName + '"\n' +
     '  ⇒ بُنيت **قبل** هذا التعديل، فهي كودٌ قديمٌ بختمٍ لا يطابق الشجرة.\n\n' +
     '  🔴 و`deploy-to-play.ps1` يرفع **هذا الملفّ بعينه** لا الأرشيف:\n' +
     '     ' + rel + '\n\n' +
