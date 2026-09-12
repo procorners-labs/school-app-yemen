@@ -87,6 +87,11 @@ if ($null -ne $mfText) {
     $mm = [regex]::Match($mfText, "\x12\x0BversionName\x1A([\s\S])")
     if ($mm.Success) {
         $len = [int][char]$mm.Groups[1].Value
+        # 🔴 وvarint متعدّدُ البايتات (‏طولٌ ≥ ١٢٨) **لا يُفسَّر هنا** — يُترك غيرَ مقيس.
+        #   نظيرُه في `aab-version-name.js` يقرؤه كاملاً؛ والفارقُ مقصود: قيمةٌ بهذا
+        #   الطول مستحيلةٌ لـ`versionName`، وحضورُها يعني أن البنيةَ ليست ما نظنّ
+        #   ⇒ **إعلانُ عدمِ القياس أصدقُ من تفسيرٍ نصفِ صحيح.**
+        if ($len -ge 0x80) { $len = 0 }
         if ($len -gt 0 -and ($mm.Index + $mm.Length + $len) -le $mfText.Length) {
             $mfVName = $mfText.Substring($mm.Index + $mm.Length, $len)
         }
