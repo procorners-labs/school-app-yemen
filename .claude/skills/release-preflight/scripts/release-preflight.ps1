@@ -75,12 +75,36 @@ $dexText = Read-Bytes-Text $bundleDex
 # حملت كودَ `vc35` وختمَ `34/3.1`، وفارقُها عن الصحيحة **بايتان** ⇒ لا الحجمُ
 # ولا التوقيعُ ولا الزمنُ يفرزها. و`versionName` **سلسلةٌ في مانيفست الحزمة**
 # ⇒ الحزمةُ تشهد على ختمها بنفسها. **قِس من سطحِ الدعوى لا من سطحٍ مجاور.**
+#
+# 🔴 وضُيّق 2026-09-12 من **احتواءٍ** إلى **تساوٍ** — بعد أن سقط نظيرُه في
+# `stale-bundle-guard`: كان يطابق على بايتات الحزمة الخام فصدّق `"2.8"` على
+# حزمةٍ ختمُها `3.2`. وهذا السطحُ أسلمُ (مانيفستٌ مفكوكٌ ٢٠ ك.ب لا ٣٫٣ م.ب)،
+# لكن `Contains` يبقى من الفئة نفسِها: أيُّ ختمٍ يصادف وروداً آخرَ في المانيفست
+# يمرّ. و`versionName` **حقلٌ في protobuf** تُقرأ قيمتُه بطولها:
+#     ‏\x12\x0B versionName \x1A <الطول> <القيمة>
+$mfVName = $null
+if ($null -ne $mfText) {
+    $mm = [regex]::Match($mfText, "\x12\x0BversionName\x1A([\s\S])")
+    if ($mm.Success) {
+        $len = [int][char]$mm.Groups[1].Value
+        # 🔴 وvarint متعدّدُ البايتات (‏طولٌ ≥ ١٢٨) **لا يُفسَّر هنا** — يُترك غيرَ مقيس.
+        #   نظيرُه في `aab-version-name.js` يقرؤه كاملاً؛ والفارقُ مقصود: قيمةٌ بهذا
+        #   الطول مستحيلةٌ لـ`versionName`، وحضورُها يعني أن البنيةَ ليست ما نظنّ
+        #   ⇒ **إعلانُ عدمِ القياس أصدقُ من تفسيرٍ نصفِ صحيح.**
+        if ($len -ge 0x80) { $len = 0 }
+        if ($len -gt 0 -and ($mm.Index + $mm.Length + $len) -le $mfText.Length) {
+            $mfVName = $mfText.Substring($mm.Index + $mm.Length, $len)
+        }
+    }
+}
+
 if ($null -eq $mfText) { Add-Check "ختمُ الإصدار" "unmeasured" "تعذّر قراءةُ مانيفست الحزمة" }
 elseif ($null -eq $vName) { Add-Check "ختمُ الإصدار" "unmeasured" "تعذّرت قراءةُ versionName من build.gradle.kts" }
-elseif ($mfText.Contains($vName)) {
-    Add-Check "ختمُ الإصدار" "pass" "مانيفستُ الحزمة يحمل '$vName' — يطابق الشجرة"
+elseif ($null -eq $mfVName) { Add-Check "ختمُ الإصدار" "unmeasured" "تعذّر استخراجُ versionName من مانيفست الحزمة — **ولا يُقرأ هذا سلامة**" }
+elseif ($mfVName -ceq $vName) {
+    Add-Check "ختمُ الإصدار" "pass" "مانيفستُ الحزمة يحمل '$mfVName' — يطابق الشجرة"
 } else {
-    Add-Check "ختمُ الإصدار" "fail" "الشجرةُ تقول '$vName' والحزمةُ لا تحمله ⇒ **بُنيت قبل رفعِ الرقم**. أعِد البناء: .\gradlew :app:bundleRelease"
+    Add-Check "ختمُ الإصدار" "fail" "الشجرةُ تقول '$vName' ومانيفستُ الحزمة يحمل '$mfVName' ⇒ **بُنيت قبل رفعِ الرقم**. أعِد البناء: .\gradlew :app:bundleRelease"
 }
 
 # ② التوقيع
