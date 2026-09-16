@@ -50,11 +50,16 @@ android {
         //   القيمة: يُقرأ الرقمُ من هنا بعد `git pull` ويُراجَع مقابل Play Console،
         //   ولا يُجمَّد رقمٌ مشتقٌّ في أيّ وثيقة فيصير إملاءً بائتاً.
         //
-        // 🔴 و34 استُهلك كذلك (2026-09-05): رُفع إلى `internal` وهو حيٌّ هناك، ولم يصل
-        //   production بعد. ⇒ 35. **ورفعُه هنا لا يعني أنه بُني ولا رُفع** — يبقى
-        //   الأمرُ هو المصدر: `deploy-to-play.ps1 -Track internal -DryRun`.
-        versionCode = 35
-        versionName = "3.2"
+        // 🔴 و34 استُهلك (2026-09-05) **ووصل production في 2026-09-06** — كان مكتوباً هنا
+        //   «ولم يصل production بعد»، وبطَل. و35 استُهلك في الشجرة ببناءٍ مختومٍ مؤرشَف
+        //   (`SchoolApp-v3.2-vc35-2026-09-07.aab`) **لم يُرفع ولن يُرفع**: يحمل
+        //   `googleusercontent.com` عارياً في قائمة تجاوز الشهادة، وإصلاحُه (`f6f5160`)
+        //   كُتب بعد ختمها بيومين. ⇒ **36 يحمل تحسينات 35 زائدَ الإصلاح، و35 يُترك
+        //   بلا حرقٍ عند Play** (رقمُ الشجرة ليس رقماً محروقاً).
+        // 🔴 **ورفعُ الرقم هنا لا يعني أنه بُني ولا رُفع** — المصدرُ الحيُّ للرقم المحجوز
+        //   أمرٌ واحد: `deploy-to-play.ps1 -Track internal -DryRun`.
+        versionCode = 36
+        versionName = "3.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
