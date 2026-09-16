@@ -1,1 +1,3 @@
 {"at":"2026-08-31T21:24:51Z","kind":"wrong-root-blocked","key":"Releases/SchoolAppyemen/README.md","branch":"release/vc33","sha":"e532136","detail":"تعديل من جذر خارج شجرة المشروع (C:/Users/osama/Workspace)","schema":1}
+{"at":"2026-09-05T20:55:58Z","kind":"wrong-root-blocked","key":"Releases/SchoolAppyemen/README.md","branch":"fix/play-preflight-404","sha":"9b341af","detail":"تعديل من جذر خارج شجرة المشروع (C:/Users/osama/Workspace)","schema":1}
+{"at":"2026-09-07T01:07:01Z","kind":"wrong-root-blocked","key":"Releases/SchoolAppyemen/README.md","branch":"fix/promote-metadata-from-play","sha":"2fb195d","detail":"تعديل من جذر خارج شجرة المشروع (C:/Users/osama/Workspace)","schema":1}
