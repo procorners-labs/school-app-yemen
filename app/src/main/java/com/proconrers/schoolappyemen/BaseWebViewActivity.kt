@@ -60,6 +60,7 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
     protected val requestedUrl: String
         get() = intent?.getStringExtra(AppConfig.EXTRA_TARGET_URL)
             ?.takeIf { AppConfig.isInternalUrl(it) }
+            ?.let { AppConfig.withEbdaaSchool(it) }
             ?: startUrl
 
     private val fileChooserLauncher = registerForActivityResult(
@@ -324,6 +325,27 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
                 recreate()
                 return true
             }
+        }
+    }
+
+    /**
+     * رابطٌ جديدٌ والشاشةُ على القمّة — `DeepLinkActivity` و`LinkRouter` يبدآنها بـ
+     * `CLEAR_TOP|SINGLE_TOP` فيُسلَّم الـIntent هنا لا إلى `onCreate`.
+     *
+     * 🔴 **العلّة (مقيسةٌ على S22U · vc36 · 2026-09-17):** بلا هذا التجاوز بقي سجلُّ
+     * `TeacherActivity` نفسُه، وصفرُ إعادة تحميلٍ في ٦ لقطات ⇒ **الرابطُ المضغوطُ يُتجاهَل**.
+     * يُحمَّل فقط إن حمل الـIntent رابطاً — عودةٌ بلا رابطٍ لا تُعيد تحميلَ صفحةٍ يعمل عليها المعلّم.
+     */
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        if (intent.getStringExtra(AppConfig.EXTRA_TARGET_URL).isNullOrBlank()) return
+        setIntent(intent)
+        val target = requestedUrl
+        if (WebViewSupport.isOnline(this)) {
+            loadTarget(target)
+        } else {
+            lastFailedUrl = target
+            showError(sslError = false)
         }
     }
 
