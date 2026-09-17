@@ -211,6 +211,45 @@ object AppConfig {
     /** هل الرابط داخل المنصّة أصلاً (أي ليس `EXTERNAL`)؟ */
     fun isInternalUrl(url: String): Boolean = routeTargetFor(url) != LinkTarget.EXTERNAL
 
+    /** مداخلُ المنصّتين **بلا مقطع مدرسة** — وحدها تحتاج `?school=` صريحاً. */
+    private val BARE_PORTAL_PATHS = setOf(
+        "/teacher", "/teacher/", "/teacher/index.html",
+        "/student", "/student/", "/student/index.html"
+    )
+
+    /**
+     * يُكمل رابطَ منصّةٍ **بلا مدرسة** بمعرّف «مدارس الإبداع» — والتطبيقُ لمدرسةٍ واحدة.
+     *
+     * 🔴 **العلّة (مقيسةٌ 2026-09-17):** `home/index.html?school=abdaawatmuaz` يربط إلى
+     * `/teacher/index.html` و`/student/index.html` **بلا `?school=`**، والرابطُ المضغوط يصل
+     * `requestedUrl` كما هو ⇒ تُفتح المنصّةُ بلا مستأجر.
+     *
+     * **يمسّ حصراً** مضيفَ منصّةٍ + مسارٍ من [BARE_PORTAL_PATHS] + غيابَ `school` و`schoolId`.
+     * و`/teacher/abdaawatmuaz` يحمل مدرستَه في مساره فلا يُمسّ، وكذلك أيُّ رابطٍ خارجيّ.
+     * 🟢 `java.net.URI` لا `android.net.Uri` ⇒ يُختبَر على JVM. وأيُّ رابطٍ لا يُحلَّل
+     * يُعاد **كما هو** (لا يُكسَر ما كان يعمل).
+     */
+    fun withEbdaaSchool(url: String): String {
+        val uri = try { java.net.URI(url) } catch (e: Exception) { return url }
+        val scheme = (uri.scheme ?: "").lowercase()
+        if (scheme != "https" && scheme != "http") return url
+        val host = (uri.host ?: "").lowercase()
+        if (host.isBlank() || !isPlatformHost(host)) return url
+        if ((uri.rawPath ?: "").lowercase() !in BARE_PORTAL_PATHS) return url
+
+        val query = uri.rawQuery
+        val hasSchool = query?.split('&')?.any {
+            val key = it.substringBefore('=')
+            key == "school" || key == "schoolId"
+        } ?: false
+        if (hasSchool) return url
+
+        val newQuery = if (query.isNullOrEmpty()) "school=$EBDAA_SCHOOL_ID"
+                       else "$query&school=$EBDAA_SCHOOL_ID"
+        val fragment = uri.rawFragment?.let { "#$it" } ?: ""
+        return "${uri.scheme}://${uri.rawAuthority}${uri.rawPath}?$newQuery$fragment"
+    }
+
     // ─── نطاقات SSL الموثوقة ──────────────────────────────────────────────────
     /**
      * نطاقاتُ Google المسموحُ لها **تجاوزُ خطأِ شهادة** — وهي أضيقُ من [GOOGLE_HOSTS]
