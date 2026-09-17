@@ -338,13 +338,16 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
      */
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        if (intent.getStringExtra(AppConfig.EXTRA_TARGET_URL).isNullOrBlank()) return
+        // دائماً قبل الشرط — كنمط `MainActivity.onNewIntent` — كي لا يبقى `getIntent()` قديماً.
         setIntent(intent)
+        if (intent.getStringExtra(AppConfig.EXTRA_TARGET_URL).isNullOrBlank()) return
         val target = requestedUrl
         if (WebViewSupport.isOnline(this)) {
             loadTarget(target)
         } else {
             lastFailedUrl = target
+            // النشاطُ حيّ وقد يكون في منتصف تحميلٍ أو سحبةِ تحديث — لا مؤشّرَ عالقاً فوق الخطأ.
+            stopIndicators()
             showError(sslError = false)
         }
     }
