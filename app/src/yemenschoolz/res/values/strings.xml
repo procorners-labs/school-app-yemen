@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- نسخة «يمن سكولز» العامّة: تتجاوز نصوص الهوية في main (التي تخصّ نسخة الإبداع). -->
+<resources>
+    <string name="app_name">يمن سكولز</string>
+    <string name="school_logo_desc">شعار يمن سكولز</string>
+    <string name="fcm_default_channel_desc">إشعارات الأخبار والتنبيهات من مدرستك</string>
+</resources>

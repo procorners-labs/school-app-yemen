@@ -16,6 +16,10 @@ plugins {
 val keystoreProps = Properties()
 val keystoreFile = rootProject.file("keystore.properties")
 if (keystoreFile.exists()) keystoreProps.load(keystoreFile.inputStream())
+// 🔑 مفتاح نسخة «يمن سكولز» منفصلٌ تماماً (schoolzyemen-release.jks). لا يُوقَّع به ebdaa أبداً.
+val ysKeystoreProps = Properties()
+val ysKeystoreFile = rootProject.file("keystore-yemenschoolz.properties")
+if (ysKeystoreFile.exists()) ysKeystoreProps.load(ysKeystoreFile.inputStream())
 
 android {
     namespace = "com.proconrers.schoolappyemen"
@@ -58,8 +62,9 @@ android {
         //   بلا حرقٍ عند Play** (رقمُ الشجرة ليس رقماً محروقاً).
         // 🔴 **ورفعُ الرقم هنا لا يعني أنه بُني ولا رُفع** — المصدرُ الحيُّ للرقم المحجوز
         //   أمرٌ واحد: `deploy-to-play.ps1 -Track internal -DryRun`.
-        versionCode = 37
-        versionName = "3.4"
+        // 🔴 37 محجوزٌ لفرع release/vc37 (نسخة الإبداع قبل النسختين) — لا يُعاد استخدامه.
+        versionCode = 38
+        versionName = "3.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
@@ -74,13 +79,47 @@ android {
                 keyPassword   = keystoreProps["keyPassword"] as String
             }
         }
+        create("yemenschoolz") {
+            if (ysKeystoreProps.isNotEmpty()) {
+                storeFile     = file(ysKeystoreProps["storeFile"] as String)
+                storePassword = ysKeystoreProps["storePassword"] as String
+                keyAlias      = ysKeystoreProps["keyAlias"] as String
+                keyPassword   = ysKeystoreProps["keyPassword"] as String
+            }
+        }
+    }
+
+    // ── كودٌ واحد بنسختين (قرار المالك 2026-09-29، docs/ARCHITECTURE.md في school-app-yemen-gas) ──
+    // 🔴 اسما الحزمتين مسجّلان في Play «Android developer verification» — لا يتغيّران أبداً.
+    // ebdaa: مثبّتةٌ على مدرسة الإبداع، وسلوكها مطابقٌ لما قبل النسختين حرفياً.
+    // yemenschoolz: عامّة، تبدأ من دليل المدارس، ومضيف App Links لها app.yemenschoolz.com.
+    flavorDimensions += "brand"
+    productFlavors {
+        create("ebdaa") {
+            dimension = "brand"
+            applicationId = "com.proconrers.schoolappyemen"
+            buildConfigField("String", "PINNED_SCHOOL_ID", "\"12725ed7-c139-422c-a2d1-ec0ddd358104\"")
+            buildConfigField("String", "PINNED_SLUG", "\"abdaawatmuaz\"")
+            manifestPlaceholders["appLinkHost"] = "yemenschoolz.com"
+            manifestPlaceholders["appLinkHostWww"] = "www.yemenschoolz.com"
+            signingConfig = signingConfigs.getByName("release")
+        }
+        create("yemenschoolz") {
+            dimension = "brand"
+            applicationId = "com.yemenschoolz.app"
+            buildConfigField("String", "PINNED_SCHOOL_ID", "\"\"")
+            buildConfigField("String", "PINNED_SLUG", "\"\"")
+            manifestPlaceholders["appLinkHost"] = "app.yemenschoolz.com"
+            manifestPlaceholders["appLinkHostWww"] = "app.yemenschoolz.com"
+            signingConfig = signingConfigs.getByName("yemenschoolz")
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled   = true
             isShrinkResources = true
-            signingConfig     = signingConfigs.getByName("release")
+            // التوقيع من النسخة (productFlavors) — توقيعٌ هنا كان سيغلب مفتاحَ كلّ نسخة.
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

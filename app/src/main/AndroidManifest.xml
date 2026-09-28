@@ -116,8 +116,9 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="yemenschoolz.com" />
-                <data android:scheme="https" android:host="www.yemenschoolz.com" />
+                <!-- المضيف من النسخة: ebdaa ⇒ yemenschoolz.com (+www) · yemenschoolz ⇒ app.yemenschoolz.com -->
+                <data android:scheme="https" android:host="${appLinkHost}" />
+                <data android:scheme="https" android:host="${appLinkHostWww}" />
                 <!--
                     ‏المساراتُ مشتقّةٌ من عقد الوركر المقيس، لا من تخمين:
                       · `_schoolSlugFromPath` ⇒ `/^\/([a-z0-9-]+)\/?$/` بعد استبعاد

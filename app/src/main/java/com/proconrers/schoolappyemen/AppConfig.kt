@@ -58,17 +58,22 @@ object AppConfig {
     /** الأصل الرسمي. كل رابط جديد يُبنى منه. */
     const val CANONICAL_ORIGIN = "https://yemenschoolz.com"
 
+    // ─── النسخة (productFlavors) ─────────────────────────────────────────────
+    /** مدرسة النسخة المثبّتة: ebdaa ⇒ [EBDAA_SCHOOL_ID] · yemenschoolz ⇒ فارغ (كل المدارس). */
+    val PINNED_SCHOOL_ID: String = BuildConfig.PINNED_SCHOOL_ID
+    val PINNED_SLUG: String = BuildConfig.PINNED_SLUG
+    val IS_PINNED: Boolean get() = PINNED_SCHOOL_ID.isNotBlank()
+
     // ─── الروابط الافتراضية ───────────────────────────────────────────────────
-    private const val DEFAULT_HOME =
-        "$CANONICAL_ORIGIN/home/index.html?school=$EBDAA_SCHOOL_ID"
-    private const val DEFAULT_CMS =
-        "$CANONICAL_ORIGIN/cms/index.html?school=$EBDAA_SCHOOL_ID"
-    private const val DEFAULT_TEACHER =
-        "$CANONICAL_ORIGIN/teacher/index.html?school=$EBDAA_SCHOOL_ID"
-    private const val DEFAULT_STUDENT =
-        "$CANONICAL_ORIGIN/student/index.html?school=$EBDAA_SCHOOL_ID"
-    private const val DEFAULT_SCHEDULE =
-        "$CANONICAL_ORIGIN/schedule/index.html?school=$EBDAA_SCHOOL_ID"
+    // المثبّتة: الروابط نفسها قبل النسختين حرفياً. العامّة: دليل المدارس، والمنصّاتُ بلا مدرسة
+    // تعرض «اختر مدرستك» من الموقع نفسه.
+    private fun portal(path: String): String =
+        if (IS_PINNED) "$CANONICAL_ORIGIN$path?school=$PINNED_SCHOOL_ID" else "$CANONICAL_ORIGIN$path"
+    private val DEFAULT_HOME: String get() = if (IS_PINNED) portal("/home/index.html") else "$CANONICAL_ORIGIN/"
+    private val DEFAULT_CMS: String get() = portal("/cms/index.html")
+    private val DEFAULT_TEACHER: String get() = portal("/teacher/index.html")
+    private val DEFAULT_STUDENT: String get() = portal("/student/index.html")
+    private val DEFAULT_SCHEDULE: String get() = portal("/schedule/index.html")
     private const val DEFAULT_MASTER =
         "https://script.google.com/macros/s/AKfycbx5H6uYXb-6iVt_nT4YkdnYMhl6eZJSDxsULsKa2eyblZQcwzRo4CXR3Mh_ecRSZd4M/exec"
 
@@ -230,6 +235,7 @@ object AppConfig {
      * يُعاد **كما هو** (لا يُكسَر ما كان يعمل).
      */
     fun withEbdaaSchool(url: String): String {
+        if (!IS_PINNED) return url   // النسخة العامّة لا تفترض مدرسة
         val uri = try { java.net.URI(url) } catch (e: Exception) { return url }
         val scheme = (uri.scheme ?: "").lowercase()
         if (scheme != "https" && scheme != "http") return url
@@ -244,8 +250,8 @@ object AppConfig {
         } ?: false
         if (hasSchool) return url
 
-        val newQuery = if (query.isNullOrEmpty()) "school=$EBDAA_SCHOOL_ID"
-                       else "$query&school=$EBDAA_SCHOOL_ID"
+        val newQuery = if (query.isNullOrEmpty()) "school=$PINNED_SCHOOL_ID"
+                       else "$query&school=$PINNED_SCHOOL_ID"
         val fragment = uri.rawFragment?.let { "#$it" } ?: ""
         return "${uri.scheme}://${uri.rawAuthority}${uri.rawPath}?$newQuery$fragment"
     }

@@ -1,6 +1,8 @@
 package com.proconrers.schoolappyemen
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
@@ -15,7 +17,18 @@ class AppConfigTenantUrlTest {
     private val id = AppConfig.EBDAA_SCHOOL_ID
 
     @Test
+    fun pinned_flavor_is_ebdaa_or_none() {
+        // ebdaa مثبّتةٌ على الإبداع حرفياً؛ yemenschoolz بلا مدرسة.
+        assertTrue(AppConfig.PINNED_SCHOOL_ID == id || AppConfig.PINNED_SCHOOL_ID.isEmpty())
+        if (!AppConfig.IS_PINNED) {
+            listOf("https://yemenschoolz.com/teacher/index.html", "https://yemenschoolz.com/student")
+                .forEach { assertEquals(it, it, AppConfig.withEbdaaSchool(it)) }
+        }
+    }
+
+    @Test
     fun adds_school_to_bare_portal_entries() {
+        assumeTrue(AppConfig.IS_PINNED)   // الإكمال للنسخة المثبّتة وحدها
         val cases = mapOf(
             "https://yemenschoolz.com/teacher/index.html" to "https://yemenschoolz.com/teacher/index.html?school=$id",
             "https://yemenschoolz.com/student/index.html" to "https://yemenschoolz.com/student/index.html?school=$id",

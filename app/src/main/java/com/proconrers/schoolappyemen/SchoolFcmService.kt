@@ -112,9 +112,11 @@ class SchoolFcmService : FirebaseMessagingService() {
     private fun targetUrlFor(newsId: String, slug: String, schoolId: String): String {
         val origin = AppConfig.CANONICAL_ORIGIN
         if (newsId.isBlank()) return AppConfig.HOME_URL
-        val s = slug.ifBlank { AppConfig.EBDAA_SLUG }
+        // الافتراضُ مدرسةُ النسخة المثبّتة فقط؛ النسخة العامّة بلا مدرسة ⇒ الصفحة الرئيسية.
+        val s = slug.ifBlank { AppConfig.PINNED_SLUG }
         if (s.isNotBlank()) return "$origin/$s?news=$newsId"
-        val sid = schoolId.ifBlank { AppConfig.EBDAA_SCHOOL_ID }
+        val sid = schoolId.ifBlank { AppConfig.PINNED_SCHOOL_ID }
+        if (sid.isBlank()) return AppConfig.HOME_URL
         return "$origin/home/newsarticle.html?news=$newsId&school=$sid"
     }
 
