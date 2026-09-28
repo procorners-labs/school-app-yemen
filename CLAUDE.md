@@ -24,7 +24,7 @@
 |---|---|---|
 | المجلد | `AndroidStudioProjects\SchoolAppyemen` | `AndroidStudioProjects\YemenSchoolz` |
 | المستودع | `school-app-yemen` — **عامّ** | `yemen-schoolz` — **خاصّ** |
-| `applicationId` | `com.proconrers.schoolappyemen` | `com.proconrers.schoolzyemen` |
+| `applicationId` | `com.proconrers.schoolappyemen` | `com.yemenschoolz.app` (مسجَّل في Play Console ← التحقّق من المطوّرين، 2026-09-15؛ صُحِّح هنا 2026-09-29 — كان مكتوباً `com.proconrers.schoolzyemen` خطأً) |
 | **الحالة على Play** | 🟢 **منشورٌ** · `vc34/3.1` على `production` (2026-09-06) · مئاتُ المستخدمين (‏🔴 **العددُ يُقرأ من اللوحة بعدّاده** — §الإصدارات) | 🔴 **لم يُنشر قطّ** — لا بطاقةَ على Play Console أصلاً |
 | مفتاح التوقيع | `Workspace\Secure\schoolapp.jks` · alias `schoolapp` | `YemenSchoolz\schoolzyemen-release.jks` · alias `schoolzyemen` |
 | النطاق المخدوم | مدرسةٌ واحدة (`abdaawatmuaz`) | **أيُّ مدرسةٍ مسجَّلة** عبر `home-all-school` |
@@ -32,10 +32,8 @@
 ### 🔴 والمعرّفان **ليسا صيغتين لاسمٍ واحد** — سُئل هذا السؤالُ فعلاً 2026-09-15
 
 ```
-com.proconrers.school  app  yemen   ← هذا المستودع · منشورٌ · vc34
-com.proconrers.school   z   yemen   ← الشقيق · غيرُ منشور · vc1
-                        ↑↑↑
-                 حرفان في المنتصف — والمقطعُ المشترك يغطّي معظمَ السلسلة
+com.proconrers.schoolappyemen   ← هذا المستودع · منشورٌ
+com.yemenschoolz.app            ← الشقيق (المعرّف الحقيقي المسجَّل في Play Console)
 ```
 
 **والفرقُ مقيسٌ من أربعة أسطحَ مستقلّة** (قياسُ جلسة `fix-app-links-yemenschoolz`، وأُكِّد

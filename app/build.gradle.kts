@@ -58,8 +58,8 @@ android {
         //   بلا حرقٍ عند Play** (رقمُ الشجرة ليس رقماً محروقاً).
         // 🔴 **ورفعُ الرقم هنا لا يعني أنه بُني ولا رُفع** — المصدرُ الحيُّ للرقم المحجوز
         //   أمرٌ واحد: `deploy-to-play.ps1 -Track internal -DryRun`.
-        versionCode = 36
-        versionName = "3.3"
+        versionCode = 37
+        versionName = "3.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
