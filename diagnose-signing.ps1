@@ -143,7 +143,7 @@ if (Test-Path $kpFile) {
 # ════════════════════════════════════════════════════════════════════════════
 Title "4. Current AAB Signature"
 # ════════════════════════════════════════════════════════════════════════════
-$aabPath = "$PROJ\app\build\outputs\bundle\release\app-release.aab"
+$aabPath = "$PROJ\app\build\outputs\bundle\ebdaaRelease\app-ebdaa-release.aab"
 if (Test-Path $aabPath) {
     $aab = Get-Item $aabPath
     OK "app-release.aab found ($([math]::Round($aab.Length/1MB,1)) MB)"

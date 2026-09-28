@@ -306,7 +306,7 @@ Banner "  This replaces assembleRelease - AAB is required by Google Play."
 Banner ""
 
 $buildStart = Get-Date
-$buildOut   = .\gradlew.bat bundleRelease 2>&1
+$buildOut   = .\gradlew.bat bundleEbdaaRelease 2>&1
 $buildStr   = $buildOut | Out-String
 $buildSec   = [math]::Round(((Get-Date) - $buildStart).TotalSeconds, 0)
 
@@ -318,7 +318,7 @@ if ($buildStr -match "BUILD SUCCESSFUL") {
     Banner ""
 
     # Find AAB
-    $aab = Get-Item "$PROJ\app\build\outputs\bundle\release\app-release.aab" -ErrorAction SilentlyContinue
+    $aab = Get-Item "$PROJ\app\build\outputs\bundle\ebdaaRelease\app-ebdaa-release.aab" -ErrorAction SilentlyContinue
     if ($aab) {
         $aabMB = [math]::Round($aab.Length/1MB, 1)
         Banner "  AAB file  : $($aab.FullName)"
@@ -377,7 +377,7 @@ if ($buildStr -match "BUILD SUCCESSFUL") {
     $errLines | ForEach-Object { Banner "  $_" }
     Banner ""
     Banner "  Run manually for full output:"
-    Banner "  .\gradlew.bat bundleRelease --stacktrace"
+    Banner "  .\gradlew.bat bundleEbdaaRelease --stacktrace"
     exit 1
 }
 

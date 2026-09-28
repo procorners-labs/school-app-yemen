@@ -266,7 +266,7 @@ if (Test-Path $apkPath) {
     $daysOld = [math]::Round(((Get-Date) - $apk.LastWriteTime).TotalDays, 0)
     Info "آخر بناء: $($apk.LastWriteTime.ToString('yyyy-MM-dd HH:mm')) (منذ $daysOld يوم)"
 } else {
-    Warn "app-release.apk غير موجود — شغّل: .\gradlew.bat assembleRelease"
+    Warn "app-release.apk غير موجود — شغّل: .\gradlew.bat assembleEbdaaRelease"
 }
 
 # ════════════════════════════════════════════════════════════════════════════

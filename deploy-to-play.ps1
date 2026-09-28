@@ -63,7 +63,7 @@ $ErrorActionPreference   = "Stop"
 $PACKAGE_NAME  = "com.proconrers.schoolappyemen"
 $PROJ          = "C:\Users\osama\AndroidStudioProjects\SchoolAppyemen"
 $KEY_FILE      = "$PROJ\service-account-key.json"
-$AAB_PATH      = "$PROJ\app\build\outputs\bundle\release\app-release.aab"
+$AAB_PATH      = "$PROJ\app\build\outputs\bundle\ebdaaRelease\app-ebdaa-release.aab"
 $PLAY_SCOPE    = "https://www.googleapis.com/auth/androidpublisher"
 $TOKEN_URL     = "https://oauth2.googleapis.com/token"
 $API_BASE      = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -159,9 +159,9 @@ if ($Promote) {
 elseif (-not (Test-Path $AAB_PATH)) {
     WARN "AAB not found. Building now..."
     $env:JAVA_HOME = "C:\Program Files\Android\Android Studio1\jbr"
-    & .\gradlew.bat bundleRelease 2>&1 | Select-Object -Last 5
+    & .\gradlew.bat bundleEbdaaRelease 2>&1 | Select-Object -Last 5
     if (-not (Test-Path $AAB_PATH)) {
-        ERR "AAB build failed. Run: .\gradlew.bat bundleRelease"
+        ERR "AAB build failed. Run: .\gradlew.bat bundleEbdaaRelease"
         exit 1
     }
 }

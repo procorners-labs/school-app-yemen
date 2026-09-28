@@ -45,10 +45,10 @@ if ($g -match 'applicationId\s*=\s*"([^"]+)"') { $appId = $Matches[1] }
 if ($g -match 'versionCode\s*=\s*(\d+)')       { $vCode = [int]$Matches[1] }
 if ($g -match 'versionName\s*=\s*"([^"]+)"')   { $vName = $Matches[1] }
 
-$AAB = Join-Path $PROJ "app\build\outputs\bundle\release\app-release.aab"
+$AAB = Join-Path $PROJ "app\build\outputs\bundle\ebdaaRelease\app-ebdaa-release.aab"
 if (-not (Test-Path $AAB)) {
     Write-Host "[X] لا حزمةَ إصدارٍ في مجلد البناء." -ForegroundColor Red
-    Write-Host "    ابنِ أوّلاً:  .\gradlew :app:bundleRelease" -ForegroundColor Yellow
+    Write-Host "    ابنِ أوّلاً:  .\gradlew :app:bundleEbdaaRelease" -ForegroundColor Yellow
     exit 3
 }
 
@@ -104,7 +104,7 @@ elseif ($null -eq $mfVName) { Add-Check "ختمُ الإصدار" "unmeasured" "
 elseif ($mfVName -ceq $vName) {
     Add-Check "ختمُ الإصدار" "pass" "مانيفستُ الحزمة يحمل '$mfVName' — يطابق الشجرة"
 } else {
-    Add-Check "ختمُ الإصدار" "fail" "الشجرةُ تقول '$vName' ومانيفستُ الحزمة يحمل '$mfVName' ⇒ **بُنيت قبل رفعِ الرقم**. أعِد البناء: .\gradlew :app:bundleRelease"
+    Add-Check "ختمُ الإصدار" "fail" "الشجرةُ تقول '$vName' ومانيفستُ الحزمة يحمل '$mfVName' ⇒ **بُنيت قبل رفعِ الرقم**. أعِد البناء: .\gradlew :app:bundleEbdaaRelease"
 }
 
 # ② التوقيع

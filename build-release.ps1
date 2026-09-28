@@ -3,7 +3,7 @@ param([switch]$SkipClean)
 $ErrorActionPreference = 'Stop'
 $projectDir = $PSScriptRoot
 $gradlew    = Join-Path $projectDir 'gradlew.bat'
-$outputAab  = Join-Path $projectDir 'app\build\outputs\bundle\release\app-release.aab'
+$outputAab  = Join-Path $projectDir 'app\build\outputs\bundle\ebdaaRelease\app-ebdaa-release.aab'
 
 Write-Host ''
 Write-Host '==========================================' -ForegroundColor Cyan
@@ -41,9 +41,9 @@ if (-not (Test-Path $ksFile)) {
 Write-Host 'keystore.properties found.' -ForegroundColor Green
 
 Write-Host ''
-Write-Host 'Building AAB (bundleRelease)...' -ForegroundColor Cyan
+Write-Host 'Building AAB (bundleEbdaaRelease)...' -ForegroundColor Cyan
 $startTime = Get-Date
-& $gradlew bundleRelease
+& $gradlew bundleEbdaaRelease
 if ($LASTEXITCODE -ne 0) {
     Write-Host ''
     Write-Host 'BUILD FAILED! Check errors above.' -ForegroundColor Red

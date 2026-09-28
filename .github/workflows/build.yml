@@ -63,14 +63,14 @@ jobs:
       # 🔴 ولا يُضاف `assembleRelease` هنا لاحقاً بلا قرارٍ صريح: يستدعي حقن أسرار
       #    التوقيع في CI، وهو قرارٌ أمنيّ منفصل لا ترقيةٌ تقنية.
       - name: Assemble debug
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleEbdaaDebug --no-daemon --stacktrace
 
       # 🔴 الضابطُ المعاكس لقائمة تجاوز خطأ الشهادة (`AppConfigSslTrustTest`) لا قيمةَ
       #    له إن لم يجرِ. وهو يعمل على JVM بلا محاكٍ لأن `isTrustedSslDomain` تستعمل
       #    `java.net.URI` لا `android.net.Uri` — وذلك الاختيارُ **شرطُ قابليّة الإثبات**
       #    لا تفضيلُ مكتبة.
       - name: Unit tests (debug)
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+        run: ./gradlew testEbdaaDebugUnitTest --no-daemon --stacktrace
 
       - name: Report APK size
         if: success()
