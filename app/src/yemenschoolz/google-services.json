@@ -1,0 +1,74 @@
+{
+  "project_info": {
+    "project_number": "108410742569",
+    "project_id": "school-494822",
+    "storage_bucket": "school-494822.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:108410742569:android:cd60f6317dbb3f4714b938",
+        "android_client_info": {
+          "package_name": "com.proconrers.schoolappyemen"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "104064888089481176491",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFcZz-AmX0MBk-8V5h5SzvJk2qfyGQJ1w"
+        },
+        {
+          "current_key": "AIzaSyADWtMJ5a4NrRi37PLpxFWfiRJP59ggSv0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "104064888089481176491",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:108410742569:android:72cadeed5c442e8a14b938",
+        "android_client_info": {
+          "package_name": "com.yemenschoolz.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "104064888089481176491",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFcZz-AmX0MBk-8V5h5SzvJk2qfyGQJ1w"
+        },
+        {
+          "current_key": "AIzaSyADWtMJ5a4NrRi37PLpxFWfiRJP59ggSv0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "104064888089481176491",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
