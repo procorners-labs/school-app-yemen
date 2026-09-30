@@ -50,7 +50,8 @@ object AppConfig {
 
     // ─── الهوية والنطاق ───────────────────────────────────────────────────────
     /** معرّف «مدارس الإبداع والتميز الدولية» في سجل `Master_Admin_School`. */
-    const val EBDAA_SCHOOL_ID = "12725ed7-c139-422c-a2d1-ec0ddd358104"
+    // 28p: من `BuildConfig.SCHOOL_ID` (‏`app/build.gradle.kts`) لا حرفياً في الكود.
+    const val EBDAA_SCHOOL_ID = BuildConfig.SCHOOL_ID
 
     /** الـslug العامّ لنفس المدرسة — يخدم `yemenschoolz.com/abdaawatmuaz`. */
     const val EBDAA_SLUG = "abdaawatmuaz"
@@ -70,7 +71,8 @@ object AppConfig {
     private const val DEFAULT_SCHEDULE =
         "$CANONICAL_ORIGIN/schedule/index.html?school=$EBDAA_SCHOOL_ID"
     private const val DEFAULT_MASTER =
-        "https://script.google.com/macros/s/AKfycbx5H6uYXb-6iVt_nT4YkdnYMhl6eZJSDxsULsKa2eyblZQcwzRo4CXR3Mh_ecRSZd4M/exec"
+        // 28p: عبر الموقع المستضاف والـWorker (‏`/master-admin/`) لا رابط `/exec` خام.
+        "$CANONICAL_ORIGIN/master-admin/index.html"
 
     // مدة الكاش — 6 ساعات (إعادة الجلب فقط بعد هذه المدة)
     private const val SYNC_INTERVAL_MS = 6L * 60L * 60L * 1000L

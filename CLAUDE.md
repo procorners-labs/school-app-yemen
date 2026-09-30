@@ -167,8 +167,8 @@ https://yemenschoolz.com/{home,teacher,student}/index.html + /gas/teacher + /hom
 `AppConfig.kt` + إصدار جديد عبر `deploy-to-play.ps1`. لا تفترض أن تعديل روابط الـWorker في المستودعين
 الآخرين يكفي — تحقّق من هذا الملف تحديداً إن كان التغيير يمسّ التوجيه.
 
-`MASTER_URL` (`KEY_MASTER`) لا يزال يشير إلى رابط Apps Script `/exec` مباشرة (لا عبر الـWorker) —
-منفصل عن مسار المزامنة المعطَّل أعلاه.
+`MASTER_URL` (`KEY_MASTER`) يشير منذ 28p إلى `yemenschoolz.com/master-admin/index.html` (عبر الـWorker، لا `/exec` خام).
+و`EBDAA_SCHOOL_ID` يُقرأ من `BuildConfig.SCHOOL_ID` (‏`app/build.gradle.kts`) لا حرفياً في الكود.
 
 ---
 

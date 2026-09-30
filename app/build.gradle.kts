@@ -63,6 +63,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true
+
+        // 28p: معرّف المدرسة الافتراضي (يُقرأ في `AppConfig.EBDAA_SCHOOL_ID`) — من الإعداد لا من الكود.
+        // يُغيَّر من هنا (أو لكل flavor) دون لمس الكود. القيمة الحالية = «مدارس الإبداع والتميز الدولية».
+        buildConfigField("String", "SCHOOL_ID", "\"12725ed7-c139-422c-a2d1-ec0ddd358104\"")
     }
 
     signingConfigs {
